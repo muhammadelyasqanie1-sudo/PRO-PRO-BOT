@@ -2,7 +2,6 @@
 from __future__ import annotations
 import asyncio, hashlib, html, logging, os, re
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urljoin
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
 
@@ -46,10 +45,57 @@ def _otp(text):
 def _fetch(base, key):
     endpoint = os.getenv("AUGESTEL_MESSAGES_PATH", "/messages").strip()
     url = base.rstrip("/") + "/" + endpoint.lstrip("/")
-    start = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
-    response = requests.get(url, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, params={"start_date": start}, timeout=12)
+    start = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    response = requests.get(url, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"}, params={"start_date": start, "per_page": 200}, timeout=12)
     response.raise_for_status()
     return response.json()
+
+async def sync_augestel_numbers(db):
+    """Fetch one Augestel inventory page into the admin-review queue.
+
+    Exactly one provider request is made per admin action to respect the API
+    rate limit. New numbers are not made available to users until approved.
+    """
+    base = os.getenv("AUGESTEL_API_BASE", "https://augestel.com/api/v1/iprn").strip()
+    keys = await db.list_active_api_keys()
+    key = keys[0]["api_key"] if keys else os.getenv("AUGESTEL_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("No active Augestel API key is configured.")
+    try:
+        page = max(1, int(await db.get_setting("augestel_numbers_page", "1")))
+    except ValueError:
+        page = 1
+
+    def fetch_page():
+        url = base.rstrip("/") + "/numbers"
+        response = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+            params={"page": page, "per_page": 100},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    payload = await asyncio.to_thread(fetch_page)
+    records = list(_records(payload))
+    normalized = []
+    for record in records:
+        number = _field(record, "number", "phone_number", "phone", "msisdn")
+        if not number:
+            continue
+        range_name = _field(record, "range_name", "range", "country", "country_name")
+        normalized.append({"number": number, "country": range_name or "Unknown", "range_name": range_name})
+    added, duplicates = await db.add_pending_provider_numbers(normalized)
+    pagination = payload.get("pagination", {}) if isinstance(payload, dict) else {}
+    try:
+        last_page = max(1, int(pagination.get("last_page", page))) if isinstance(pagination, dict) else page
+    except (TypeError, ValueError):
+        last_page = page
+    next_page = page + 1 if page < last_page else 1
+    await db.set_setting("augestel_numbers_page", str(next_page))
+    return {"page": page, "last_page": last_page, "received": len(normalized), "added": added, "duplicates": duplicates, "next_page": next_page}
+
 
 async def poll_augestel(app):
     base = os.getenv("AUGESTEL_API_BASE", "https://augestel.com/api/v1/iprn").strip()
@@ -63,7 +109,7 @@ async def poll_augestel(app):
             if not keys and env_key:
                 keys = [{"name": "Railway environment key", "api_key": env_key}]
             if not keys:
-                await asyncio.sleep(15)
+                await asyncio.sleep(30)
                 continue
 
             payload = None
@@ -85,7 +131,7 @@ async def poll_augestel(app):
             if payload is None:
                 if last_error:
                     log.warning("All active Augestel API keys failed this cycle (%s).", type(last_error).__name__)
-                await asyncio.sleep(15)
+                await asyncio.sleep(30)
                 continue
 
             for rec in _records(payload):
@@ -151,4 +197,4 @@ async def poll_augestel(app):
         except Exception as exc:
             # Never log keys, query strings, or provider response bodies.
             log.warning("Augestel polling cycle failed (%s).", type(exc).__name__)
-        await asyncio.sleep(15)
+        await asyncio.sleep(30)
