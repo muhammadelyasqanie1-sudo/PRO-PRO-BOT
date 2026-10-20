@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     lang        TEXT,
     referrer_id INTEGER,
     referrals   INTEGER NOT NULL DEFAULT 0,
+    points      INTEGER NOT NULL DEFAULT 0,
     is_banned   INTEGER NOT NULL DEFAULT 0,
     is_active   INTEGER NOT NULL DEFAULT 1,
     joined_at   TEXT    NOT NULL,
@@ -57,6 +58,22 @@ CREATE TABLE IF NOT EXISTS otp_messages (
     message TEXT NOT NULL,
     received_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    api_key TEXT NOT NULL UNIQUE,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS points_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    delta INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    actor_id INTEGER,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_points_ledger_user ON points_ledger(user_id, id DESC);
 """
 
 
@@ -77,6 +94,11 @@ class Database:
         self.conn = await aiosqlite.connect(self.path)
         self.conn.row_factory = aiosqlite.Row
         await self.conn.executescript(SCHEMA)
+        # Migrate existing databases created before points were introduced.
+        async with self.conn.execute("PRAGMA table_info(users)") as cur:
+            columns = {row[1] for row in await cur.fetchall()}
+        if "points" not in columns:
+            await self.conn.execute("ALTER TABLE users ADD COLUMN points INTEGER NOT NULL DEFAULT 0")
         await self.conn.commit()
 
     async def close(self) -> None:
@@ -140,7 +162,11 @@ class Database:
             )
             if ref:
                 await self.conn.execute(
-                    "UPDATE users SET referrals = referrals + 1 WHERE id = ?", (ref,)
+                    "UPDATE users SET referrals = referrals + 1, points = points + 1 WHERE id = ?", (ref,)
+                )
+                await self.conn.execute(
+                    "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,1,'referral',?,?)",
+                    (ref, user.id, now),
                 )
             await self.conn.commit()
             return await self.get_user(user.id), True, bool(ref)  # type: ignore[return-value]
@@ -258,6 +284,121 @@ class Database:
     async def assigned_users_for_number(self, number: str) -> list[int]:
         rows = await self._all("SELECT assigned_user_id FROM phone_numbers WHERE number=? AND status='assigned' AND assigned_user_id IS NOT NULL", (number,))
         return [int(r['assigned_user_id']) for r in rows]
+ 
+    # ---------- points / referrals ----------
+    async def ensure_owner_points(self, owner_id: int, initial_points: int = 1000) -> None:
+        """Grant the initial owner balance exactly once across restarts."""
+        assert self.conn is not None
+        marker = await self.get_setting("owner_initial_points_granted")
+        if marker == "1":
+            return
+        now = _now()
+        await self.conn.execute(
+            "INSERT OR IGNORE INTO users(id,first_name,username,joined_at,last_seen,points) VALUES(?,?,?,?,?,0)",
+            (owner_id, "Bot owner", "", now, now),
+        )
+        await self.conn.execute(
+            "UPDATE users SET points = points + ? WHERE id = ?", (initial_points, owner_id)
+        )
+        await self.conn.execute(
+            "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,'initial_owner_bonus',?,?)",
+            (owner_id, initial_points, owner_id, now),
+        )
+        await self.conn.execute(
+            "INSERT INTO settings(key,value) VALUES('owner_initial_points_granted','1') "
+            "ON CONFLICT(key) DO UPDATE SET value='1'"
+        )
+        await self.conn.commit()
+
+    async def adjust_points(self, user_id: int, delta: int, reason: str, actor_id: int | None = None) -> bool:
+        """Apply a point change; negative changes cannot create a negative balance."""
+        assert self.conn is not None
+        if delta == 0 or not await self.get_user(user_id):
+            return False
+        now = _now()
+        if delta < 0:
+            cur = await self.conn.execute(
+                "UPDATE users SET points = points + ? WHERE id = ? AND points >= ?",
+                (delta, user_id, -delta),
+            )
+        else:
+            cur = await self.conn.execute(
+                "UPDATE users SET points = points + ? WHERE id = ?", (delta, user_id)
+            )
+        changed = cur.rowcount == 1
+        await cur.close()
+        if changed:
+            await self.conn.execute(
+                "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,?,?,?)",
+                (user_id, delta, reason[:100], actor_id, now),
+            )
+        await self.conn.commit()
+        return changed
+
+    async def transfer_points(self, sender_id: int, recipient_id: int, amount: int) -> bool:
+        """Atomic user-to-user transfer; both ledger rows commit together."""
+        if sender_id == recipient_id or amount <= 0:
+            return False
+        assert self.conn is not None
+        sender = await self.get_user(sender_id)
+        recipient = await self.get_user(recipient_id)
+        if not sender or not recipient or sender["is_banned"] or recipient["is_banned"]:
+            return False
+        now = _now()
+        try:
+            await self.conn.execute("BEGIN IMMEDIATE")
+            cur = await self.conn.execute(
+                "UPDATE users SET points = points - ? WHERE id = ? AND points >= ?",
+                (amount, sender_id, amount),
+            )
+            if cur.rowcount != 1:
+                await cur.close()
+                await self.conn.rollback()
+                return False
+            await cur.close()
+            await self.conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (amount, recipient_id))
+            await self.conn.execute(
+                "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,?,?,?)",
+                (sender_id, -amount, f"transfer_to:{recipient_id}", recipient_id, now),
+            )
+            await self.conn.execute(
+                "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,?,?,?)",
+                (recipient_id, amount, f"transfer_from:{sender_id}", sender_id, now),
+            )
+            await self.conn.commit()
+            return True
+        except Exception:
+            await self.conn.rollback()
+            raise
+
+    async def points_history(self, user_id: int, limit: int = 10) -> list[dict[str, Any]]:
+        return await self._all(
+            "SELECT delta,reason,actor_id,created_at FROM points_ledger WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (user_id, max(1, min(limit, 50))),
+        )
+
+    # ---------- API key management ----------
+    async def list_api_keys(self) -> list[dict[str, Any]]:
+        return await self._all("SELECT id,name,active,created_at FROM api_keys ORDER BY id")
+
+    async def list_active_api_keys(self) -> list[dict[str, Any]]:
+        return await self._all("SELECT id,name,api_key,active FROM api_keys WHERE active=1 ORDER BY id")
+
+    async def add_api_key(self, name: str, api_key: str) -> bool:
+        try:
+            await self._exec(
+                "INSERT INTO api_keys(name,api_key,active,created_at) VALUES(?,?,1,?)",
+                (name[:60], api_key.strip(), _now()),
+            )
+            return True
+        except aiosqlite.IntegrityError:
+            return False
+
+    async def toggle_api_key(self, key_id: int) -> int:
+        return await self._exec("UPDATE api_keys SET active=CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id=?", (key_id,))
+
+    async def delete_api_key(self, key_id: int) -> int:
+        return await self._exec("DELETE FROM api_keys WHERE id=?", (key_id,))
 
     # ---------- key/value settings ----------
     async def get_setting(self, key: str, default: str = "") -> str:
