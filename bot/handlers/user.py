@@ -116,13 +116,14 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 username=html.escape(username),
                 language=LANGUAGE_NAMES.get(lang, lang),
                 referrals=row["referrals"],
+                points=row.get("points", 0),
                 joined=row["joined_at"][:10],
             )
         )
     elif key == "menu_invite":
         link = f"https://t.me/{context.bot.username}?start={user.id}"
         await msg.reply_text(
-            t(lang, "invite", link=link, referrals=row["referrals"]),
+            t(lang, "invite", link=link, referrals=row["referrals"], points=row.get("points", 0)),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     elif key in ("menu_support", "menu_about"):
@@ -135,6 +136,11 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 t(lang, "support" if key == "menu_support" else "about"),
                 reply_markup=url_keyboard(lang, url),
             )
+    elif key == "menu_points":
+        await msg.reply_text(t(lang, "points", points=row.get("points", 0)))
+    elif key == "menu_send_points":
+        context.user_data["state"] = "points_transfer_target"
+        await msg.reply_text(t(lang, "send_points_prompt"))
     elif key == "menu_numbers":
         numbers = await db.list_available_numbers()
         if not numbers:
@@ -170,3 +176,51 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     row = await db.get_user(q.from_user.id)
     lang = row.get("lang") if row else None
     await q.message.reply_text(t(lang, "number_added", service=html.escape(item["service"]), country=html.escape(item["country"]), number=html.escape(item["number"])))
+
+ 
+async def handle_points_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str) -> None:
+    """Two-step user-to-user points transfer."""
+    msg = update.effective_message
+    user = update.effective_user
+    db = get_db(context)
+    row = await db.get_user(user.id)
+    lang = row.get("lang") if row else None
+    value = (msg.text or "").strip()
+
+    if state == "points_transfer_target":
+        if not value.isdigit():
+            await msg.reply_text("Please send the recipient's numeric Telegram ID, or /cancel.")
+            return
+        recipient_id = int(value)
+        if recipient_id == user.id:
+            await msg.reply_text("You cannot send points to yourself. Send another ID or /cancel.")
+            return
+        recipient = await db.get_user(recipient_id)
+        if not recipient or recipient.get("is_banned"):
+            await msg.reply_text(t(lang, "send_points_failed"))
+            return
+        context.user_data["points_recipient_id"] = recipient_id
+        context.user_data["state"] = "points_transfer_amount"
+        await msg.reply_text(t(lang, "send_points_amount", uid=recipient_id, points=row.get("points", 0)))
+        return
+
+    if state == "points_transfer_amount":
+        if not value.isdigit() or int(value) <= 0:
+            await msg.reply_text("Please send a positive whole number of points, or /cancel.")
+            return
+        recipient_id = context.user_data.get("points_recipient_id")
+        context.user_data.pop("state", None)
+        context.user_data.pop("points_recipient_id", None)
+        amount = int(value)
+        ok = bool(recipient_id) and await db.transfer_points(user.id, int(recipient_id), amount)
+        if ok:
+            await msg.reply_text(t(lang, "send_points_success", amount=amount, uid=recipient_id))
+            try:
+                await context.bot.send_message(
+                    chat_id=int(recipient_id),
+                    text=f"🎁 You received {amount} points from user <code>{user.id}</code>.",
+                )
+            except TelegramError:
+                pass
+        else:
+            await msg.reply_text(t(lang, "send_points_failed"))
