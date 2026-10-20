@@ -64,6 +64,7 @@ async def main() -> None:
         assert len(stock) == 1 and stock[0]["number"] == "+12025550123"
         assert await db.assign_phone_number(stock[0]["id"], 1)
         assert await db.assigned_users_for_number("+12025550123") == [1]
+        await db.set_banned(2, False)
         assert (await db.get_user(1))["points"] == 1
         assert await db.adjust_points(1, 5, "test_bonus", actor_id=1)
         assert await db.transfer_points(1, 2, 3)
