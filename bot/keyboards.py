@@ -51,9 +51,9 @@ def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMar
         [_btn("🚫 Ban user", "adm:ban"), _btn("✅ Unban user", "adm:unban")],
         [_btn("📢 Force-join channels", "adm:channels")],
         [_btn("📱 Manage numbers", "adm:num_stock")],
-        [_btn("🔑 API keys", "adm:api_keys"), _btn("⭐ Points", "adm:points")],
     ]
     if is_owner:
+        rows.append([_btn("🔑 API keys", "adm:api_keys"), _btn("⭐ Points", "adm:points")])
         rows.append([_btn("👮 Admins", "adm:admins")])
     rows.append([_btn(f"🛠 Maintenance: {'ON 🔴' if maintenance else 'OFF 🟢'}", "adm:maint")])
     rows.append([_btn("🔗 Support link", "adm:support"), _btn("🔗 Official link", "adm:official")])
