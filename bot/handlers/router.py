@@ -15,6 +15,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     state = context.user_data.get("state")
     if state:
+        if state in ("points_transfer_target", "points_transfer_amount"):
+            await user.handle_points_state(update, context, state)
+            return
         if await is_admin(context, update.effective_user.id):
             await admin.handle_state(update, context, state)
             return
