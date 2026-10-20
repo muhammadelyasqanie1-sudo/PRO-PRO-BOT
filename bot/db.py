@@ -251,6 +251,31 @@ class Database:
         except aiosqlite.IntegrityError:
             return False
 
+    async def add_phone_numbers_bulk(self, service: str, country: str, numbers: list[str]) -> tuple[int, int]:
+        """Insert a batch of numbers, ignoring any number already stored.
+
+        Returns (added, already_in_database). The UNIQUE constraint on number
+        is the final protection against duplicates, including concurrent imports.
+        """
+        assert self.conn is not None
+        added = 0
+        duplicates = 0
+        now = _now()
+        async with self.conn.execute("BEGIN"):
+            for number in numbers:
+                cur = await self.conn.execute(
+                    "INSERT OR IGNORE INTO phone_numbers(service,country,number,status,created_at) "
+                    "VALUES(?,?,?,'available',?)",
+                    (service, country, number, now),
+                )
+                if cur.rowcount == 1:
+                    added += 1
+                else:
+                    duplicates += 1
+                await cur.close()
+        await self.conn.commit()
+        return added, duplicates
+
     async def list_available_numbers(self, service: str | None = None, country: str | None = None) -> list[dict[str, Any]]:
         sql = "SELECT * FROM phone_numbers WHERE status='available'"
         params: list[Any] = []
