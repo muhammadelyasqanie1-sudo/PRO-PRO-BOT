@@ -136,11 +136,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif action in ("user_info", "ban", "unban", "ch_add", "support", "official", "broadcast", "otp_template", "otp_buttons"):
         context.user_data["state"] = action
         if action == "otp_template":
-            current = await db.get_setting("otp_template", "🔐 <b>NUM BOT</b>\\n📱 {service}\\n🌍 {country}\\n📞 <code>{number}</code>\\n🔢 Code: <code>{code}</code>\\n🕒 {time}\\n🗣 {language}\\n<pre>{message}</pre>")
-            await _edit(q, "📝 <b>Edit OTP message</b>\\nSend the full template. Placeholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}. Must include {number} and {code}.\\n\\nCurrent template:\\n" + esc(current), back_keyboard())
+            current = await db.get_setting("otp_template", "🔐 <b>NUM BOT</b>\n📱 {service}\n🌍 {country}\n📞 <code>{number}</code>\n🔢 Code: <code>{code}</code>\n🕒 {time}\n🗣 {language}\n<pre>{message}</pre>")
+            await _edit(q, "📝 <b>Edit OTP message</b>\nSend the full template. Placeholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}. Must include {number} and {code}.\n\nCurrent template:\n" + esc(current), back_keyboard())
         elif action == "otp_buttons":
             current = await db.get_setting("otp_button_config", "📋 Copy code | 🤖 NUM BOT | https://t.me/")
-            await _edit(q, "🔘 <b>Edit OTP buttons</b>\\nSend: <code>Copy label | Bot label | https://t.me/YourBot</code>\\nUse - instead of link to disable it.\\n\\nCurrent: " + esc(current), back_keyboard())
+            await _edit(q, "🔘 <b>Edit OTP buttons</b>\nSend: <code>Copy label | Bot label | https://t.me/YourBot</code>\nUse - instead of link to disable it.\n\nCurrent: " + esc(current), back_keyboard())
         else:
             await _edit(q, PROMPTS[action] + CANCEL_HINT, back_keyboard())
 
@@ -152,7 +152,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             [InlineKeyboardButton("🔗 Bot button link", callback_data="adm:otp_bot_link")],
             [InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")],
         ]
-        await _edit(q, "📝 <b>OTP message settings</b>\\n\\nPlaceholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}\\nHTML formatting is supported.", InlineKeyboardMarkup(rows))
+        await _edit(q, "📝 <b>OTP message settings</b>\n\nPlaceholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}\nHTML formatting is supported.", InlineKeyboardMarkup(rows))
 
     elif action in ("otp_template", "otp_copy_label", "otp_bot_label", "otp_bot_link"):
         context.user_data["state"] = action
@@ -170,7 +170,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in services]
         rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
         rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="adm:home")])
-        await _edit(q, "📱 <b>Add a number</b>\\nChoose the service:", InlineKeyboardMarkup(rows))
+        await _edit(q, "📱 <b>Add a number</b>\nChoose the service:", InlineKeyboardMarkup(rows))
 
     elif action == "num_service":
         service = arg
@@ -341,7 +341,7 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
             await msg.reply_text("Please send a name between 2 and 40 characters.")
             return
         key = "custom_services" if state == "service_add" else "custom_countries"
-        values = [v for v in (await db.get_setting(key)).split("\\n") if v]
+        values = [v for v in (await db.get_setting(key)).split("\n") if v]
         if text.casefold() not in {v.casefold() for v in values}:
             values.append(text)
             await db.set_setting(key, "\n".join(values))
