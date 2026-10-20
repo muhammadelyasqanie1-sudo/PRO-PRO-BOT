@@ -49,6 +49,7 @@ def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMar
         [_btn("🔎 User info", "adm:user_info")],
         [_btn("🚫 Ban user", "adm:ban"), _btn("✅ Unban user", "adm:unban")],
         [_btn("📢 Force-join channels", "adm:channels")],
+        [_btn("📱 Manage numbers", "adm:num_stock")],
     ]
     if is_owner:
         rows.append([_btn("👮 Admins", "adm:admins")])
