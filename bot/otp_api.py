@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
 
 log = logging.getLogger(__name__)
 
@@ -106,12 +107,31 @@ async def poll_augestel(app):
                             assigned.append(int(candidate["assigned_user_id"]))
                 if assigned:
                     code = _otp(message)
-                    text = ("🔐 <b>New OTP received</b>\n\n"
-                            f"📱 Service: <b>{html.escape(source)}</b>\n"
+                    country_name = _field(rec, "country", "country_name")
+                    country_code = _field(rec, "country_code", "iso", "iso2")
+                    if not country_code and "afghanistan" in country_name.lower():
+                        country_code = "AFG"
+                    country_label = country_code or country_name or "N/A"
+                    lang_label = _field(rec, "language", "lang") or "English / دری"
+                    text = ("🔐 <b>NUM BOT · New OTP</b>\n\n"
+                            f"🗣 Language: <b>{html.escape(lang_label)}</b>\n"
+                            f"📱 App: <b>{html.escape(source)}</b>\n"
+                            f"🌍 Country: <b>{html.escape(country_label)}</b>\n"
                             f"📞 Number: <code>{html.escape(number)}</code>\n"
                             f"🔢 Code: <code>{html.escape(code)}</code>\n"
                             f"🕒 Time: {html.escape(received)}\n\n"
                             f"<pre>{html.escape(message[:2500])}</pre>")
+                    bot_link = os.getenv("BOT_PUBLIC_LINK", "").strip()
+                    buttons = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("📋 Copy code", copy_text=CopyTextButton(text=code)),
+                        *([InlineKeyboardButton("🤖 NUM BOT", url=bot_link)] if bot_link.startswith("https://t.me/") else []),
+                    ]])
+                    channel_id = os.getenv("OTP_CHANNEL_ID", "").strip()
+                    if channel_id:
+                        try:
+                            await app.bot.send_message(chat_id=int(channel_id), text=text, reply_markup=buttons)
+                        except Exception as exc:
+                            log.warning("Could not post OTP to configured channel (%s).", type(exc).__name__)
                     for uid in set(assigned):
                         try:
                             await app.bot.send_message(chat_id=uid, text=text, reply_markup=buttons)
