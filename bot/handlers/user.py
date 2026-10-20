@@ -137,7 +137,29 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 reply_markup=url_keyboard(lang, url),
             )
     elif key == "menu_points":
-        await msg.reply_text(t(lang, "points", points=row.get("points", 0)))
+        history = await db.points_history(user.id, 5)
+        lines = []
+        for item in history:
+            delta = int(item["delta"])
+            reason = item["reason"]
+            if reason == "referral":
+                label = "Referral bonus / پاداش دعوت"
+            elif reason.startswith("transfer_to:"):
+                label = f"Sent to {reason.split(':', 1)[1]} / ارسال به کاربر"
+            elif reason.startswith("transfer_from:"):
+                label = f"Received from {reason.split(':', 1)[1]} / دریافت از کاربر"
+            elif reason == "initial_owner_bonus":
+                label = "Initial bonus / امتیاز اولیه"
+            elif reason == "admin_adjustment":
+                label = "Admin adjustment / تغییر مدیر"
+            else:
+                label = reason
+            lines.append(f"• {'+' if delta > 0 else ''}{delta} — {html.escape(label)}")
+        history_text = "\\n".join(lines) if lines else "No transactions yet / هنوز تراکنشی نیست."
+        await msg.reply_text(
+            t(lang, "points", points=row.get("points", 0)) +
+            "\\n\\n📜 Recent history / تاریخچهٔ اخیر:\\n" + history_text
+        )
     elif key == "menu_send_points":
         context.user_data["state"] = "points_transfer_target"
         await msg.reply_text(t(lang, "send_points_prompt"))
