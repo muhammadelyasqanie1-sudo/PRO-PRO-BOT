@@ -15,7 +15,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, action
     q = update.callback_query
     uid = q.from_user.id
     if not is_owner(context, uid):
-        await q.answer("Only the bot owner can manage API keys and points.", show_alert=True)
+        await q.edit_message_text("Only the bot owner can manage API keys and points.", reply_markup=back_keyboard())
         return
     db = get_db(context)
 
