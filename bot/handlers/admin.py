@@ -139,12 +139,20 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     elif action == "num_add":
         context.user_data.pop("num_add", None)
-        await _edit(q, "📱 <b>Add a number</b>\nChoose the service:", _number_service_keyboard())
+        services = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\\n") if v]))
+        rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in services]
+        rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
+        rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="adm:home")])
+        await _edit(q, "📱 <b>Add a number</b>\\nChoose the service:", InlineKeyboardMarkup(rows))
 
     elif action == "num_service":
         service = arg
         context.user_data["num_add"] = {"service": service}
         await _edit(q, f"📱 <b>Service:</b> {esc(service)}\nChoose the country:", _number_country_keyboard())
+
+    elif action in ("service_add", "country_add"):
+        context.user_data["state"] = action
+        await _edit(q, "Send the new service name:" if action == "service_add" else "Send the new country name:", back_keyboard())
 
     elif action == "num_country":
         selected = context.user_data.get("num_add") or {}
@@ -267,6 +275,19 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
 
     done = True
     reply = ""
+
+    if state in ("service_add", "country_add"):
+        if len(text) < 2 or len(text) > 40:
+            await msg.reply_text("Please send a name between 2 and 40 characters.")
+            return
+        key = "custom_services" if state == "service_add" else "custom_countries"
+        values = [v for v in (await db.get_setting(key)).split("\\n") if v]
+        if text.casefold() not in {v.casefold() for v in values}:
+            values.append(text)
+            await db.set_setting(key, "\\n".join(values))
+        context.user_data.pop("state", None)
+        await msg.reply_text(f"✅ Added: <b>{esc(text)}</b>. Reopen Add number to see it.", reply_markup=back_keyboard())
+        return
 
     if state == "num_add_number":
         selected = context.user_data.get("num_add") or {}
