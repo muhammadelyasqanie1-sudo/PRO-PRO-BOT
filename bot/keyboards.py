@@ -14,6 +14,7 @@ def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
         [t(lang, "menu_profile"), t(lang, "menu_invite")],
         [t(lang, "menu_support"), t(lang, "menu_about")],
         [t(lang, "menu_language"), t(lang, "menu_numbers")],
+        [t(lang, "menu_points"), t(lang, "menu_send_points")],
     ]
     if admin:
         rows.append([t(lang, "menu_admin")])
@@ -50,6 +51,7 @@ def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMar
         [_btn("🚫 Ban user", "adm:ban"), _btn("✅ Unban user", "adm:unban")],
         [_btn("📢 Force-join channels", "adm:channels")],
         [_btn("📱 Manage numbers", "adm:num_stock")],
+        [_btn("🔑 API keys", "adm:api_keys"), _btn("⭐ Points", "adm:points")],
     ]
     if is_owner:
         rows.append([_btn("👮 Admins", "adm:admins")])
