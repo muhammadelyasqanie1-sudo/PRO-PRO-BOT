@@ -62,6 +62,25 @@ async def main() -> None:
         assert not await db.add_phone_number("WhatsApp", "United States", "+12025550123")
         stock = await db.list_available_numbers()
         assert len(stock) == 1 and stock[0]["number"] == "+12025550123"
+        # Services are hidden from users until explicitly activated by an admin.
+        assert await db.list_active_services() == []
+        assert await db.toggle_service_active("WhatsApp") is True
+        assert await db.list_active_services() == ["WhatsApp"]
+        assert await db.toggle_service_active("WhatsApp") is False
+        assert await db.list_active_services() == []
+        # Provider inventory is queued for approval, deduplicated, and only enters stock after review.
+        added, duplicates = await db.add_pending_provider_numbers([
+            {"number": "+12025550124", "country": "Afghanistan", "range_name": "AFG AREEBA"},
+            {"number": "+12025550124", "country": "Afghanistan", "range_name": "AFG AREEBA"},
+        ])
+        assert (added, duplicates) == (1, 1)
+        pending = await db.list_pending_provider_numbers()
+        assert len(pending) == 1 and pending[0]["number"] == "+12025550124"
+        assert await db.list_available_numbers() == stock
+        assert await db.toggle_service_active("WhatsApp") is True
+        assert await db.review_provider_number(pending[0]["id"], "WhatsApp") == "approved"
+        assert await db.review_provider_number(pending[0]["id"], "WhatsApp") == "missing"
+        assert len(await db.list_available_numbers(services=await db.list_active_services())) == 2
         assert await db.assign_phone_number(stock[0]["id"], 1)
         assert await db.assigned_users_for_number("+12025550123") == [1]
         await db.set_banned(2, False)
