@@ -336,6 +336,12 @@ class Database:
                     continue
                 country = (record.get("country") or "Unknown").strip()[:60] or "Unknown"
                 range_name = (record.get("range_name") or "").strip()[:120]
+                cur_existing = await self.conn.execute("SELECT 1 FROM phone_numbers WHERE number=? LIMIT 1", (number[:30],))
+                already_live = await cur_existing.fetchone()
+                await cur_existing.close()
+                if already_live:
+                    duplicates += 1
+                    continue
                 cur = await self.conn.execute(
                     "INSERT OR IGNORE INTO pending_provider_numbers(number,country,range_name,status,imported_at) VALUES(?,?,?,'pending',?)",
                     (number[:30], country, range_name, now),
