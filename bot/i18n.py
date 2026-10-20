@@ -16,6 +16,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_about": "📢 Official channel",
         "menu_language": "🌐 Language",
         "menu_numbers": "📱 Get number",
+        "menu_points": "⭐ My points",
+        "menu_send_points": "💸 Send points",
         "menu_admin": "⚙️ Admin panel",
         "profile": (
             "👤 <b>Your profile</b>\n\n"
@@ -24,9 +26,15 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Username: {username}\n"
             "🗣 Language: {language}\n"
             "👥 Friends invited: <b>{referrals}</b>\n"
+            "⭐ Points: <b>{points}</b>\n"
             "📅 Joined: {joined}"
         ),
-        "invite": "🎁 <b>Invite friends</b>\n\nShare your personal link:\n{link}\n\nFriends invited so far: <b>{referrals}</b>",
+        "invite": "🎁 <b>Invite friends</b>\n\nShare your personal link:\n{link}\n\nFriends invited: <b>{referrals}</b>\n⭐ Points earned: <b>{points}</b> (1 per valid invite)",
+        "points": "⭐ <b>Your points</b>\n\nBalance: <b>{points}</b> points.\nYou earn 1 point for each valid new user invited.",
+        "send_points_prompt": "💸 Send points\n\nSend the recipient Telegram ID:",
+        "send_points_amount": "Recipient: <code>{uid}</code>\nYour balance: <b>{points}</b>\n\nNow send the whole number of points to transfer, or /cancel.",
+        "send_points_success": "✅ Transferred <b>{amount}</b> points to <code>{uid}</code>.",
+        "send_points_failed": "❌ Transfer failed. Check the recipient ID and your balance, then try again.",
         "new_referral": "🎉 <b>{name}</b> joined using your invite link!",
         "support": "💬 Need help? Tap the button below to contact support.",
         "about": "📢 Follow our official channel for news and updates.",
@@ -54,6 +62,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_about": "📢 کانال رسمی",
         "menu_language": "🌐 زبان",
         "menu_numbers": "📱 دریافت شماره",
+        "menu_points": "⭐ امتیازهای من",
+        "menu_send_points": "💸 ارسال امتیاز",
         "menu_admin": "⚙️ پنل مدیریت",
         "profile": (
             "👤 <b>پروفایل شما</b>\n\n"
@@ -62,9 +72,15 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 نام کاربری: {username}\n"
             "🗣 زبان: {language}\n"
             "👥 دوستان دعوت‌شده: <b>{referrals}</b>\n"
+            "⭐ امتیازها: <b>{points}</b>\n"
             "📅 تاریخ عضویت: {joined}"
         ),
-        "invite": "🎁 <b>دعوت دوستان</b>\n\nلینک اختصاصی شما:\n{link}\n\nتعداد دوستان دعوت‌شده: <b>{referrals}</b>",
+        "invite": "🎁 <b>دعوت دوستان</b>\n\nلینک اختصاصی شما:\n{link}\n\nدوستان دعوت‌شده: <b>{referrals}</b>\n⭐ امتیاز کسب‌شده: <b>{points}</b> (برای هر دعوت معتبر ۱ امتیاز)",
+        "points": "⭐ <b>امتیازهای شما</b>\n\nموجودی: <b>{points}</b> امتیاز.\nبرای هر کاربر جدیدی که با لینک شما عضو شود، ۱ امتیاز می‌گیرید.",
+        "send_points_prompt": "💸 <b>ارسال امتیاز</b>\n\nآی‌دی عددی تلگرام گیرنده را بفرستید:",
+        "send_points_amount": "گیرنده: <code>{uid}</code>\nموجودی شما: <b>{points}</b>\n\nحالا تعداد امتیاز صحیح را بفرستید، یا /cancel.",
+        "send_points_success": "✅ تعداد <b>{amount}</b> امتیاز به <code>{uid}</code> انتقال یافت.",
+        "send_points_failed": "❌ انتقال انجام نشد. آی‌دی گیرنده و موجودی خود را بررسی کنید.",
         "new_referral": "🎉 <b>{name}</b> با لینک دعوت شما عضو شد!",
         "support": "💬 به کمک نیاز دارید؟ روی دکمهٔ زیر بزنید تا با پشتیبانی در ارتباط باشید.",
         "about": "📢 برای دریافت اخبار و اطلاعیه‌ها کانال رسمی ما را دنبال کنید.",
@@ -91,6 +107,8 @@ MENU_KEYS = (
     "menu_about",
     "menu_language",
     "menu_numbers",
+    "menu_points",
+    "menu_send_points",
     "menu_admin",
 )
 
