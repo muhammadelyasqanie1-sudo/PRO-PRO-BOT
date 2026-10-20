@@ -162,10 +162,10 @@ class Database:
             )
             if ref:
                 await self.conn.execute(
-                    "UPDATE users SET referrals = referrals + 1, points = points + 1 WHERE id = ?", (ref,)
+                    "UPDATE users SET referrals = referrals + 10, points = points + 10 WHERE id = ?", (ref,)
                 )
                 await self.conn.execute(
-                    "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,1,'referral',?,?)",
+                    "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,10,'referral',?,?)",
                     (ref, user.id, now),
                 )
             await self.conn.commit()
@@ -286,7 +286,7 @@ class Database:
         return [int(r['assigned_user_id']) for r in rows]
  
     # ---------- points / referrals ----------
-    async def ensure_owner_points(self, owner_id: int, initial_points: int = 1000) -> None:
+    async def ensure_owner_points(self, owner_id: int, initial_points: int = 10000) -> None:
         """Grant the initial owner balance exactly once across restarts."""
         assert self.conn is not None
         marker = await self.get_setting("owner_initial_points_granted")
@@ -309,6 +309,31 @@ class Database:
             "ON CONFLICT(key) DO UPDATE SET value='1'"
         )
         await self.conn.commit()
+
+
+    async def claim_daily_points(self, user_id: int, amount: int = 15) -> tuple[bool, int]:
+        """Grant the daily reward once per UTC day."""
+        assert self.conn is not None
+        user = await self.get_user(user_id)
+        if not user or user["is_banned"]:
+            return False, int(user.get("points", 0)) if user else 0
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        key = f"daily_points:{user_id}"
+        if await self.get_setting(key) == today:
+            return False, int(user.get("points", 0))
+        now = _now()
+        await self.conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (amount, user_id))
+        await self.conn.execute(
+            "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,'daily_bonus',?,?)",
+            (user_id, amount, user_id, now),
+        )
+        await self.conn.execute(
+            "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, today),
+        )
+        await self.conn.commit()
+        updated = await self.get_user(user_id)
+        return True, int(updated.get("points", 0)) if updated else amount
 
     async def adjust_points(self, user_id: int, delta: int, reason: str, actor_id: int | None = None) -> bool:
         """Apply a point change; negative changes cannot create a negative balance."""
