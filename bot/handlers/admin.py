@@ -12,6 +12,7 @@ from telegram.ext import ContextTypes
 
 from ..keyboards import admin_panel_keyboard, back_keyboard, confirm_broadcast_keyboard
 from ..utils import get_db, get_settings, is_admin, is_owner, valid_url
+from ..otp_api import sync_augestel_numbers
 
 from . import extra_admin
 
@@ -163,6 +164,76 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "otp_bot_link": "Send the bot link starting with https://t.me/",
         }
         await _edit(q, prompts[action] + CANCEL_HINT, back_keyboard())
+
+    elif action == "services":
+        candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
+        active = {v.casefold() for v in await db.list_active_services()}
+        rows = [[InlineKeyboardButton(("🟢 " if s.casefold() in active else "⚪ ") + s, callback_data=f"adm:service_toggle:{i}")] for i, s in enumerate(candidates)]
+        rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
+        rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
+        await _edit(q, "🧩 <b>Service visibility</b>\nOnly services marked 🟢 are shown to users. Tap a service to activate/deactivate it.", InlineKeyboardMarkup(rows))
+
+    elif action == "service_toggle":
+        candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
+        if not arg.isdigit() or int(arg) >= len(candidates):
+            await _edit(q, "Service list changed. Reopen Services and try again.", back_keyboard())
+            return
+        service_name = candidates[int(arg)]
+        enabled = await db.toggle_service_active(service_name)
+        active = {v.casefold() for v in await db.list_active_services()}
+        rows = [[InlineKeyboardButton(("🟢 " if item.casefold() in active else "⚪ ") + item, callback_data=f"adm:service_toggle:{i}")] for i, item in enumerate(candidates)]
+        rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
+        rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
+        await _edit(q, ("✅ Activated: " if enabled else "⚪ Deactivated: ") + esc(service_name) + "\n\n🧩 <b>Service visibility</b>", InlineKeyboardMarkup(rows))
+
+    elif action == "provider_sync":
+        try:
+            result = await sync_augestel_numbers(db)
+        except Exception as exc:
+            log.warning("Augestel inventory sync failed (%s).", type(exc).__name__)
+            error_text = str(exc) if isinstance(exc, RuntimeError) and str(exc).startswith("Please wait") else "⚠️ Augestel sync failed. Check the API key and provider API status, then try again."
+            await _edit(q, esc(error_text), InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry sync", callback_data="adm:provider_sync")],[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+            return
+        await _edit(q, f"✅ <b>Augestel page {result['page']}/{result['last_page']} fetched</b>\nNew pending numbers: <b>{result['added']}</b>\nAlready imported: <b>{result['duplicates']}</b>\nReceived: {result['received']}\n\nNo number is visible to users until you approve it and assign a service. Next page: {result['next_page']}.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("🔄 Fetch next page", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+
+    elif action == "provider_pending":
+        pending = await db.list_pending_provider_numbers(20)
+        rows = [[InlineKeyboardButton(f"#{n['id']} · {n['number']} · {n['country']}"[:60], callback_data=f"adm:provider_review:{n['id']}")] for n in pending]
+        rows.append([InlineKeyboardButton("🔄 Sync Augestel page", callback_data="adm:provider_sync")])
+        rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
+        text = "📥 <b>Numbers awaiting approval</b>\nChoose a number, then assign it to an active service."
+        if not pending:
+            text = "📥 <b>No numbers awaiting approval.</b>\nUse Sync Augestel page to fetch inventory."
+        await _edit(q, text, InlineKeyboardMarkup(rows))
+
+    elif action == "provider_review":
+        item = await db.get_pending_provider_number(int(arg))
+        if not item:
+            await _edit(q, "This pending number was already reviewed or no longer exists.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Pending list", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+            return
+        active_services = await db.list_active_services()
+        rows = [[InlineKeyboardButton(s, callback_data=f"adm:provider_approve:{item['id']}:{i}")] for i, s in enumerate(active_services)]
+        rows.append([InlineKeyboardButton("❌ Reject number", callback_data=f"adm:provider_reject:{item['id']}")])
+        rows.append([InlineKeyboardButton("⬅️ Pending list", callback_data="adm:provider_pending")])
+        text = f"📱 <b>Review provider number #{item['id']}</b>\nNumber: <code>{esc(item['number'])}</code>\nRange/country: {esc(item['range_name'] or item['country'])}\n\nChoose the service only if this number is compatible. If no service is active, activate one in Services first."
+        if not active_services:
+            rows = [[InlineKeyboardButton("🧩 Manage services", callback_data="adm:services")],[InlineKeyboardButton("❌ Reject number", callback_data=f"adm:provider_reject:{item['id']}")],[InlineKeyboardButton("⬅️ Pending list", callback_data="adm:provider_pending")]]
+        await _edit(q, text, InlineKeyboardMarkup(rows))
+
+    elif action == "provider_approve":
+        raw_id, sep, service_index = arg.partition(":")
+        active_services = await db.list_active_services()
+        if not sep or not raw_id.isdigit() or not service_index.isdigit() or int(service_index) >= len(active_services):
+            await _edit(q, "Choose an active service to approve this number.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Pending list", callback_data="adm:provider_pending")],[InlineKeyboardButton("🧩 Manage services", callback_data="adm:services")]]))
+            return
+        service = active_services[int(service_index)]
+        status = await db.review_provider_number(int(raw_id), service)
+        msg = "✅ Number approved and added to stock." if status == "approved" else ("ℹ️ This number already exists in stock; it was marked as duplicate." if status == "duplicate" else "This pending number was already reviewed.")
+        await _edit(q, msg, InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review more", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+
+    elif action == "provider_reject":
+        rejected = await db.reject_provider_number(int(arg))
+        await _edit(q, "❌ Number rejected." if rejected else "This pending number was already reviewed.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review more", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
 
     elif action == "num_add":
         context.user_data.pop("num_add", None)

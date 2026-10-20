@@ -52,6 +52,17 @@ CREATE TABLE IF NOT EXISTS phone_numbers (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_phone_numbers_status ON phone_numbers(status, service, country);
+CREATE TABLE IF NOT EXISTS pending_provider_numbers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT NOT NULL UNIQUE,
+    country TEXT NOT NULL DEFAULT 'Unknown',
+    range_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    service TEXT,
+    imported_at TEXT NOT NULL,
+    reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pending_provider_status ON pending_provider_numbers(status, id DESC);
 CREATE TABLE IF NOT EXISTS otp_messages (
     provider_key TEXT PRIMARY KEY,
     number TEXT NOT NULL,
@@ -276,15 +287,111 @@ class Database:
         await self.conn.commit()
         return added, duplicates
 
-    async def list_available_numbers(self, service: str | None = None, country: str | None = None) -> list[dict[str, Any]]:
+    async def list_active_services(self) -> list[str]:
+        return [v.strip() for v in (await self.get_setting("active_services")).split("\n") if v.strip()]
+
+    async def toggle_service_active(self, service: str) -> bool:
+        """Toggle a service's visibility to users; return its new active state."""
+        service = service.strip()[:40]
+        values = await self.list_active_services()
+        match = next((v for v in values if v.casefold() == service.casefold()), None)
+        if match:
+            values = [v for v in values if v.casefold() != service.casefold()]
+            active = False
+        else:
+            values.append(service)
+            active = True
+        await self.set_setting("active_services", "\n".join(values))
+        return active
+
+    async def list_phone_number_services(self) -> list[str]:
+        rows = await self._all("SELECT DISTINCT service FROM phone_numbers ORDER BY service COLLATE NOCASE")
+        return [str(r["service"]) for r in rows]
+
+    async def list_available_numbers(self, service: str | None = None, country: str | None = None, services: list[str] | None = None) -> list[dict[str, Any]]:
         sql = "SELECT * FROM phone_numbers WHERE status='available'"
         params: list[Any] = []
-        if service:
+        if services is not None:
+            if not services:
+                return []
+            sql += " AND service IN (" + ",".join("?" for _ in services) + ")"
+            params.extend(services)
+        elif service:
             sql += " AND service=?"; params.append(service)
         if country:
             sql += " AND country=?"; params.append(country)
         sql += " ORDER BY id DESC LIMIT 50"
         return await self._all(sql, tuple(params))
+
+    async def add_pending_provider_numbers(self, records: list[dict[str, str]]) -> tuple[int, int]:
+        """Store newly discovered provider numbers for explicit admin review."""
+        assert self.conn is not None
+        added = duplicates = 0
+        now = _now()
+        await self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            for record in records:
+                number = (record.get("number") or "").strip()
+                if not number:
+                    continue
+                country = (record.get("country") or "Unknown").strip()[:60] or "Unknown"
+                range_name = (record.get("range_name") or "").strip()[:120]
+                cur_existing = await self.conn.execute("SELECT 1 FROM phone_numbers WHERE number=? LIMIT 1", (number[:30],))
+                already_live = await cur_existing.fetchone()
+                await cur_existing.close()
+                if already_live:
+                    duplicates += 1
+                    continue
+                cur = await self.conn.execute(
+                    "INSERT OR IGNORE INTO pending_provider_numbers(number,country,range_name,status,imported_at) VALUES(?,?,?,'pending',?)",
+                    (number[:30], country, range_name, now),
+                )
+                if cur.rowcount == 1:
+                    added += 1
+                else:
+                    duplicates += 1
+                await cur.close()
+            await self.conn.commit()
+        except Exception:
+            await self.conn.rollback()
+            raise
+        return added, duplicates
+
+    async def list_pending_provider_numbers(self, limit: int = 20) -> list[dict[str, Any]]:
+        return await self._all("SELECT * FROM pending_provider_numbers WHERE status='pending' ORDER BY id LIMIT ?", (max(1, min(limit, 50)),))
+
+    async def get_pending_provider_number(self, pending_id: int) -> Optional[dict[str, Any]]:
+        return await self._one("SELECT * FROM pending_provider_numbers WHERE id=? AND status='pending'", (pending_id,))
+
+    async def review_provider_number(self, pending_id: int, service: str) -> str:
+        """Approve into the live stock or mark duplicate; never overwrites existing stock."""
+        assert self.conn is not None
+        await self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            item = await self._one("SELECT * FROM pending_provider_numbers WHERE id=? AND status='pending'", (pending_id,))
+            if not item:
+                await self.conn.rollback()
+                return "missing"
+            now = _now()
+            cur = await self.conn.execute(
+                "INSERT OR IGNORE INTO phone_numbers(service,country,number,status,created_at) VALUES(?,?,?,'available',?)",
+                (service[:40], item["country"][:60], item["number"], now),
+            )
+            inserted = cur.rowcount == 1
+            await cur.close()
+            status = "approved" if inserted else "duplicate"
+            await self.conn.execute(
+                "UPDATE pending_provider_numbers SET status=?,service=?,reviewed_at=? WHERE id=? AND status='pending'",
+                (status, service[:40], now, pending_id),
+            )
+            await self.conn.commit()
+            return status
+        except Exception:
+            await self.conn.rollback()
+            raise
+
+    async def reject_provider_number(self, pending_id: int) -> bool:
+        return await self._exec("UPDATE pending_provider_numbers SET status='rejected',reviewed_at=? WHERE id=? AND status='pending'", (_now(), pending_id)) == 1
 
     async def get_phone_number(self, number_id: int) -> Optional[dict[str, Any]]:
         return await self._one("SELECT * FROM phone_numbers WHERE id=?", (number_id,))

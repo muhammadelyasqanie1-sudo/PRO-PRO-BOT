@@ -172,7 +172,8 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         context.user_data["state"] = "points_transfer_target"
         await msg.reply_text(t(lang, "send_points_prompt"))
     elif key == "menu_numbers":
-        numbers = await db.list_available_numbers()
+        active_services = await db.list_active_services()
+        numbers = await db.list_available_numbers(services=active_services)
         if not numbers:
             await msg.reply_text(t(lang, "no_numbers"))
         else:
@@ -197,8 +198,9 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
     db = get_db(context)
     item = await db.get_phone_number(number_id)
-    if not item or item["status"] != "available":
-        await q.message.reply_text("This number is no longer available. / این شماره دیگر موجود نیست.")
+    active_services = {s.casefold() for s in await db.list_active_services()}
+    if not item or item["status"] != "available" or item["service"].casefold() not in active_services:
+        await q.message.reply_text("This number or its service is no longer available. / این شماره یا سرویس دیگر موجود نیست.")
         return
     if not await db.assign_phone_number(number_id, q.from_user.id):
         await q.message.reply_text("This number was just taken. Please choose another.")
