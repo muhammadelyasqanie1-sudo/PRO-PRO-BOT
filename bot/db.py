@@ -313,7 +313,7 @@ class Database:
     async def adjust_points(self, user_id: int, delta: int, reason: str, actor_id: int | None = None) -> bool:
         """Apply a point change; negative changes cannot create a negative balance."""
         assert self.conn is not None
-        if delta == 0 or not await self.get_user(user_id):
+        if delta == 0 or abs(delta) > 1_000_000_000 or not await self.get_user(user_id):
             return False
         now = _now()
         if delta < 0:
@@ -337,7 +337,7 @@ class Database:
 
     async def transfer_points(self, sender_id: int, recipient_id: int, amount: int) -> bool:
         """Atomic user-to-user transfer; both ledger rows commit together."""
-        if sender_id == recipient_id or amount <= 0:
+        if sender_id == recipient_id or amount <= 0 or amount > 1_000_000_000:
             return False
         assert self.conn is not None
         sender = await self.get_user(sender_id)
