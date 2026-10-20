@@ -30,8 +30,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "⭐ Points: <b>{points}</b>\n"
             "📅 Joined: {joined}"
         ),
-        "invite": "🎁 <b>Invite friends</b>\n\nShare your personal link:\n{link}\n\nFriends invited: <b>{referrals}</b>\n⭐ Points earned: <b>{points}</b> (1 per valid invite)",
-        "points": "⭐ <b>Your points</b>\n\nBalance: <b>{points}</b> points.\nYou earn 1 point for each valid new user invited.",
+        "invite": "🎁 <b>Invite friends</b>\n\nShare your personal link:\n{link}\n\nFriends invited: <b>{referrals}</b>\n⭐ Points earned: <b>{points}</b> (10 points per valid invite)",
+        "points": "⭐ <b>Your points</b>\n\nBalance: <b>{points}</b> points.\nYou earn 10 points for each valid new user invited.",
         "send_points_prompt": "💸 Send points\n\nSend the recipient Telegram ID:",
         "send_points_amount": "Recipient: <code>{uid}</code>\nYour balance: <b>{points}</b>\n\nNow send the whole number of points to transfer, or /cancel.",
         "send_points_success": "✅ Transferred <b>{amount}</b> points to <code>{uid}</code>.",
@@ -77,8 +77,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "⭐ امتیازها: <b>{points}</b>\n"
             "📅 تاریخ عضویت: {joined}"
         ),
-        "invite": "🎁 <b>دعوت دوستان</b>\n\nلینک اختصاصی شما:\n{link}\n\nدوستان دعوت‌شده: <b>{referrals}</b>\n⭐ امتیاز کسب‌شده: <b>{points}</b> (برای هر دعوت معتبر ۱ امتیاز)",
-        "points": "⭐ <b>امتیازهای شما</b>\n\nموجودی: <b>{points}</b> امتیاز.\nبرای هر کاربر جدیدی که با لینک شما عضو شود، ۱ امتیاز می‌گیرید.",
+        "invite": "🎁 <b>دعوت دوستان</b>\n\nلینک اختصاصی شما:\n{link}\n\nدوستان دعوت‌شده: <b>{referrals}</b>\n⭐ امتیاز کسب‌شده: <b>{points}</b> (برای هر دعوت معتبر ۱۰ امتیاز)",
+        "points": "⭐ <b>امتیازهای شما</b>\n\nموجودی: <b>{points}</b> امتیاز.\nبرای هر کاربر جدیدی که با لینک شما عضو شود، ۱۰ امتیاز می‌گیرید.",
         "send_points_prompt": "💸 <b>ارسال امتیاز</b>\n\nآی‌دی عددی تلگرام گیرنده را بفرستید:",
         "send_points_amount": "گیرنده: <code>{uid}</code>\nموجودی شما: <b>{points}</b>\n\nحالا تعداد امتیاز صحیح را بفرستید، یا /cancel.",
         "send_points_success": "✅ تعداد <b>{amount}</b> امتیاز به <code>{uid}</code> انتقال یافت.",
