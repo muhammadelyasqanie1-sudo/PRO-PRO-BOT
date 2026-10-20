@@ -18,6 +18,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_numbers": "📱 Get number",
         "menu_points": "⭐ My points",
         "menu_send_points": "💸 Send points",
+        "menu_daily_points": "🎁 Daily points",
         "menu_admin": "⚙️ Admin panel",
         "profile": (
             "👤 <b>Your profile</b>\n\n"
@@ -64,6 +65,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_numbers": "📱 دریافت شماره",
         "menu_points": "⭐ امتیازهای من",
         "menu_send_points": "💸 ارسال امتیاز",
+        "menu_daily_points": "🎁 امتیاز روزانه",
         "menu_admin": "⚙️ پنل مدیریت",
         "profile": (
             "👤 <b>پروفایل شما</b>\n\n"
@@ -109,6 +111,7 @@ MENU_KEYS = (
     "menu_numbers",
     "menu_points",
     "menu_send_points",
+    "menu_daily_points",
     "menu_admin",
 )
 
