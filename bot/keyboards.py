@@ -15,6 +15,7 @@ def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
         [t(lang, "menu_support"), t(lang, "menu_about")],
         [t(lang, "menu_language"), t(lang, "menu_numbers")],
         [t(lang, "menu_points"), t(lang, "menu_send_points")],
+        ["🎁 Daily points" if lang == "en" else "🎁 امتیاز روزانه"],
     ]
     if admin:
         rows.append([t(lang, "menu_admin")])
