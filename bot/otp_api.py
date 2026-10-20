@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
 
 log = logging.getLogger(__name__)
 
@@ -113,19 +112,29 @@ async def poll_augestel(app):
                         country_code = "AFG"
                     country_label = country_code or country_name or "N/A"
                     lang_label = _field(rec, "language", "lang") or "English / دری"
-                    text = ("🔐 <b>NUM BOT · New OTP</b>\n\n"
-                            f"🗣 Language: <b>{html.escape(lang_label)}</b>\n"
-                            f"📱 App: <b>{html.escape(source)}</b>\n"
-                            f"🌍 Country: <b>{html.escape(country_label)}</b>\n"
-                            f"📞 Number: <code>{html.escape(number)}</code>\n"
-                            f"🔢 Code: <code>{html.escape(code)}</code>\n"
-                            f"🕒 Time: {html.escape(received)}\n\n"
-                            f"<pre>{html.escape(message[:2500])}</pre>")
-                    bot_link = os.getenv("BOT_PUBLIC_LINK", "").strip()
-                    buttons = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("📋 Copy code", copy_text=CopyTextButton(text=code)),
-                        *([InlineKeyboardButton("🤖 NUM BOT", url=bot_link)] if bot_link.startswith("https://t.me/") else []),
-                    ]])
+                    values = {
+                        "{language}": html.escape(lang_label),
+                        "{service}": html.escape(source),
+                        "{country}": html.escape(country_label),
+                        "{number}": html.escape(number),
+                        "{code}": html.escape(code),
+                        "{time}": html.escape(received),
+                        "{message}": html.escape(message[:2500]),
+                    }
+                    template = await db.get_setting("otp_template", "🔐 <b>NUM BOT</b>\n📱 {service}\n🌍 {country}\n📞 <code>{number}</code>\n🔢 Code: <code>{code}</code>\n🕒 {time}\n🗣 {language}\n<pre>{message}</pre>")
+                    text = template
+                    for token, value in values.items():
+                        text = text.replace(token, value)
+                    config = (await db.get_setting("otp_button_config", "📋 Copy code | 🤖 NUM BOT | https://t.me/")).split("|")
+                    copy_label = config[0].strip() if len(config) > 0 else "📋 Copy code"
+                    bot_label = config[1].strip() if len(config) > 1 else "🤖 NUM BOT"
+                    bot_link = config[2].strip() if len(config) > 2 else ""
+                    if not bot_link.startswith("https://t.me/"):
+                        bot_link = os.getenv("BOT_PUBLIC_LINK", "").strip()
+                    button_row = [InlineKeyboardButton(copy_label, copy_text=CopyTextButton(text=code))]
+                    if bot_link.startswith("https://t.me/"):
+                        button_row.append(InlineKeyboardButton(bot_label, url=bot_link))
+                    buttons = InlineKeyboardMarkup([button_row])
                     channel_id = os.getenv("OTP_CHANNEL_ID", "").strip()
                     if channel_id:
                         try:
