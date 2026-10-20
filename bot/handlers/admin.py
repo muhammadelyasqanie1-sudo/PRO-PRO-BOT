@@ -139,7 +139,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     elif action == "num_add":
         context.user_data.pop("num_add", None)
-        services = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\\n") if v]))
+        services = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v]))
         rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in services]
         rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
         rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="adm:home")])
@@ -284,7 +284,7 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
         values = [v for v in (await db.get_setting(key)).split("\\n") if v]
         if text.casefold() not in {v.casefold() for v in values}:
             values.append(text)
-            await db.set_setting(key, "\\n".join(values))
+            await db.set_setting(key, "\n".join(values))
         context.user_data.pop("state", None)
         await msg.reply_text(f"✅ Added: <b>{esc(text)}</b>. Reopen Add number to see it.", reply_markup=back_keyboard())
         return
