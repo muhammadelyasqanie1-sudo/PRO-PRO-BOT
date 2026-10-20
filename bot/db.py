@@ -289,7 +289,7 @@ class Database:
     async def ensure_owner_points(self, owner_id: int, initial_points: int = 10000) -> None:
         """Grant the initial owner balance exactly once across restarts."""
         assert self.conn is not None
-        marker = await self.get_setting("owner_initial_points_granted")
+        marker = await self.get_setting("owner_initial_points_granted_v2")
         if marker == "1":
             return
         now = _now()
@@ -297,15 +297,18 @@ class Database:
             "INSERT OR IGNORE INTO users(id,first_name,username,joined_at,last_seen,points) VALUES(?,?,?,?,?,0)",
             (owner_id, "Bot owner", "", now, now),
         )
+        current_owner = await self.get_user(owner_id)
+        bonus = max(0, initial_points - int(current_owner.get("points", 0) if current_owner else 0))
+        if bonus:
+            await self.conn.execute(
+                "UPDATE users SET points = points + ? WHERE id = ?", (bonus, owner_id)
+            )
+            await self.conn.execute(
+                "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,'initial_owner_bonus',?,?)",
+                (owner_id, bonus, owner_id, now),
+            )
         await self.conn.execute(
-            "UPDATE users SET points = points + ? WHERE id = ?", (initial_points, owner_id)
-        )
-        await self.conn.execute(
-            "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,'initial_owner_bonus',?,?)",
-            (owner_id, initial_points, owner_id, now),
-        )
-        await self.conn.execute(
-            "INSERT INTO settings(key,value) VALUES('owner_initial_points_granted','1') "
+            "INSERT INTO settings(key,value) VALUES('owner_initial_points_granted_v2','1') "
             "ON CONFLICT(key) DO UPDATE SET value='1'"
         )
         await self.conn.commit()
