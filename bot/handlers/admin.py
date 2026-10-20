@@ -13,6 +13,8 @@ from telegram.ext import ContextTypes
 from ..keyboards import admin_panel_keyboard, back_keyboard, confirm_broadcast_keyboard
 from ..utils import get_db, get_settings, is_admin, is_owner, valid_url
 
+from . import extra_admin
+
 log = logging.getLogger(__name__)
 esc = html.escape
 
@@ -99,6 +101,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     db = get_db(context)
     action, _, arg = (q.data or "").split(":", 1)[1].partition(":")
     owner = is_owner(context, uid)
+
+    if action in ("api_keys", "api_add", "api_toggle", "api_del", "points", "points_add", "points_sub"):
+        await extra_admin.on_callback(update, context, action, arg)
+        return
 
     if action == "home":
         context.user_data.pop("state", None)
@@ -239,6 +245,10 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
     uid = update.effective_user.id
     db = get_db(context)
     text = (msg.text or "").strip()
+
+    if state in ("api_add", "points_add", "points_sub"):
+        await extra_admin.handle_state(update, context, state)
+        return
 
     if state == "broadcast":
         context.user_data.pop("state", None)
