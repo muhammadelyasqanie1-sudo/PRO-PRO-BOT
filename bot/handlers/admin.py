@@ -329,9 +329,15 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
         if state == "otp_bot_link" and not text.startswith("https://t.me/"):
             await msg.reply_text("The bot link must start with https://t.me/")
             return
-        key = {"otp_template": "otp_message_template", "otp_copy_label": "otp_copy_label",
-               "otp_bot_label": "otp_bot_label", "otp_bot_link": "otp_bot_link"}[state]
-        await db.set_setting(key, text)
+        if state == "otp_template":
+            await db.set_setting("otp_template", text)
+        else:
+            config = (await db.get_setting("otp_button_config", "📋 Copy code | 🤖 NUM BOT | https://t.me/")).split("|")
+            while len(config) < 3:
+                config.append("")
+            index = {"otp_copy_label": 0, "otp_bot_label": 1, "otp_bot_link": 2}[state]
+            config[index] = text
+            await db.set_setting("otp_button_config", " | ".join(config))
         context.user_data.pop("state", None)
         await msg.reply_text("✅ OTP setting saved.", reply_markup=back_keyboard())
         return
