@@ -61,10 +61,23 @@ async def sync_augestel_numbers(db):
     key = keys[0]["api_key"] if keys else os.getenv("AUGESTEL_API_KEY", "").strip()
     if not key:
         raise RuntimeError("No active Augestel API key is configured.")
+    now = datetime.now(timezone.utc)
+    last_sync = await db.get_setting("augestel_inventory_last_sync", "")
+    if last_sync:
+        try:
+            previous = datetime.fromisoformat(last_sync)
+            if (now - previous).total_seconds() < 30:
+                raise RuntimeError("Please wait at least 30 seconds between inventory sync requests.")
+        except ValueError:
+            pass
     try:
         page = max(1, int(await db.get_setting("augestel_numbers_page", "1")))
     except ValueError:
         page = 1
+
+    # Record the request time before the network call to prevent simultaneous
+    # admins from issuing multiple requests against the provider rate limit.
+    await db.set_setting("augestel_inventory_last_sync", now.isoformat(timespec="seconds"))
 
     def fetch_page():
         url = base.rstrip("/") + "/numbers"
