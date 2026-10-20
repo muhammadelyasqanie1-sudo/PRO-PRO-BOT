@@ -105,11 +105,11 @@ async def poll_augestel(app):
                             assigned.append(int(candidate["assigned_user_id"]))
                 if assigned:
                     code = _otp(message)
-                    text = ("🔐 <b>New OTP received</b>\\n\\n"
-                            f"📱 Service: <b>{html.escape(source)}</b>\\n"
-                            f"📞 Number: <code>{html.escape(number)}</code>\\n"
-                            f"🔢 Code: <code>{html.escape(code)}</code>\\n"
-                            f"🕒 Time: {html.escape(received)}\\n\\n"
+                    text = ("🔐 <b>New OTP received</b>\n\n"
+                            f"📱 Service: <b>{html.escape(source)}</b>\n"
+                            f"📞 Number: <code>{html.escape(number)}</code>\n"
+                            f"🔢 Code: <code>{html.escape(code)}</code>\n"
+                            f"🕒 Time: {html.escape(received)}\n\n"
                             f"<pre>{html.escape(message[:2500])}</pre>")
                     for uid in set(assigned):
                         try:
