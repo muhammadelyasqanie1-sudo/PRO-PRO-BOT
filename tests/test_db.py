@@ -72,8 +72,9 @@ async def main() -> None:
         added, duplicates = await db.add_pending_provider_numbers([
             {"number": "+12025550124", "country": "Afghanistan", "range_name": "AFG AREEBA"},
             {"number": "+12025550124", "country": "Afghanistan", "range_name": "AFG AREEBA"},
+            {"number": "+12025550123", "country": "United States", "range_name": "US range"},
         ])
-        assert (added, duplicates) == (1, 1)
+        assert (added, duplicates) == (1, 2)
         pending = await db.list_pending_provider_numbers()
         assert len(pending) == 1 and pending[0]["number"] == "+12025550124"
         assert await db.list_available_numbers() == stock
