@@ -205,8 +205,8 @@ async def handle_points_state(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     if state == "points_transfer_amount":
-        if not value.isdigit() or int(value) <= 0:
-            await msg.reply_text("Please send a positive whole number of points, or /cancel.")
+        if not value.isdigit() or int(value) <= 0 or int(value) > 1_000_000_000:
+            await msg.reply_text("Please send a whole number between 1 and 1,000,000,000 points, or /cancel.")
             return
         recipient_id = context.user_data.get("points_recipient_id")
         context.user_data.pop("state", None)
