@@ -104,6 +104,8 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     key = MENU_LOOKUP.get((msg.text or "").strip())
+    if (msg.text or "").strip() in ("🎁 Daily points", "🎁 امتیاز روزانه"):
+        key = "menu_daily_points"
 
     if key == "menu_profile":
         username = f"@{user.username}" if user.username else "-"
@@ -160,6 +162,12 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             t(lang, "points", points=row.get("points", 0)) +
             "\n\n📜 Recent history / تاریخچهٔ اخیر:\n" + history_text
         )
+    elif key == "menu_daily_points":
+        claimed, balance = await db.claim_daily_points(user.id, 15)
+        if claimed:
+            await msg.reply_text(f"🎉 +15 daily points! Balance: {balance} / پاداش روزانه: ۱۵ امتیاز دریافت شد")
+        else:
+            await msg.reply_text(f"⏳ Daily reward already claimed. Balance: {balance} / پاداش امروز را قبلاً گرفته‌اید")
     elif key == "menu_send_points":
         context.user_data["state"] = "points_transfer_target"
         await msg.reply_text(t(lang, "send_points_prompt"))
