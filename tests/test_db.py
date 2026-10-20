@@ -64,6 +64,25 @@ async def main() -> None:
         assert len(stock) == 1 and stock[0]["number"] == "+12025550123"
         assert await db.assign_phone_number(stock[0]["id"], 1)
         assert await db.assigned_users_for_number("+12025550123") == [1]
+        assert (await db.get_user(1))["points"] == 1
+        assert await db.adjust_points(1, 5, "test_bonus", actor_id=1)
+        assert await db.transfer_points(1, 2, 3)
+        assert (await db.get_user(1))["points"] == 3
+        assert (await db.get_user(2))["points"] == 3
+        assert not await db.transfer_points(1, 2, 99)
+        assert await db.add_api_key("primary", "public-test-key-value")
+        assert not await db.add_api_key("duplicate", "public-test-key-value")
+        keys = await db.list_active_api_keys()
+        assert len(keys) == 1 and keys[0]["name"] == "primary"
+        key_id = keys[0]["id"]
+        assert await db.toggle_api_key(key_id) == 1
+        assert await db.list_active_api_keys() == []
+        assert await db.toggle_api_key(key_id) == 1
+        assert await db.delete_api_key(key_id) == 1
+        await db.ensure_owner_points(99, 1000)
+        await db.ensure_owner_points(99, 1000)
+        assert (await db.get_user(99))["points"] == 1000
+
         assert await db.save_otp_once("provider-msg-1", "+12025550123", "Your code is 123456", "2026-10-19T12:00:00Z")
         assert not await db.save_otp_once("provider-msg-1", "+12025550123", "Your code is 123456", "2026-10-19T12:00:00Z")
 
