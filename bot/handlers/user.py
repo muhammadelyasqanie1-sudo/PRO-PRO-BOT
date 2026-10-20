@@ -155,10 +155,10 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             else:
                 label = reason
             lines.append(f"• {'+' if delta > 0 else ''}{delta} — {html.escape(label)}")
-        history_text = "\\n".join(lines) if lines else "No transactions yet / هنوز تراکنشی نیست."
+        history_text = "\n".join(lines) if lines else "No transactions yet / هنوز تراکنشی نیست."
         await msg.reply_text(
             t(lang, "points", points=row.get("points", 0)) +
-            "\\n\\n📜 Recent history / تاریخچهٔ اخیر:\\n" + history_text
+            "\n\n📜 Recent history / تاریخچهٔ اخیر:\n" + history_text
         )
     elif key == "menu_send_points":
         context.user_data["state"] = "points_transfer_target"
