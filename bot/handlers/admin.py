@@ -168,19 +168,23 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif action == "services":
         candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
         active = {v.casefold() for v in await db.list_active_services()}
-        rows = [[InlineKeyboardButton(("🟢 " if s.casefold() in active else "⚪ ") + s, callback_data=f"adm:service_toggle:{s}")] for s in candidates]
+        rows = [[InlineKeyboardButton(("🟢 " if s.casefold() in active else "⚪ ") + s, callback_data=f"adm:service_toggle:{i}")] for i, s in enumerate(candidates)]
         rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
         rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
         await _edit(q, "🧩 <b>Service visibility</b>\nOnly services marked 🟢 are shown to users. Tap a service to activate/deactivate it.", InlineKeyboardMarkup(rows))
 
     elif action == "service_toggle":
-        enabled = await db.toggle_service_active(arg)
         candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
+        if not arg.isdigit() or int(arg) >= len(candidates):
+            await _edit(q, "Service list changed. Reopen Services and try again.", back_keyboard())
+            return
+        service_name = candidates[int(arg)]
+        enabled = await db.toggle_service_active(service_name)
         active = {v.casefold() for v in await db.list_active_services()}
-        rows = [[InlineKeyboardButton(("🟢 " if s.casefold() in active else "⚪ ") + s, callback_data=f"adm:service_toggle:{s}")] for s in candidates]
+        rows = [[InlineKeyboardButton(("🟢 " if item.casefold() in active else "⚪ ") + item, callback_data=f"adm:service_toggle:{i}")] for i, item in enumerate(candidates)]
         rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
         rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
-        await _edit(q, ("✅ Activated: " if enabled else "⚪ Deactivated: ") + esc(arg) + "\n\n🧩 <b>Service visibility</b>", InlineKeyboardMarkup(rows))
+        await _edit(q, ("✅ Activated: " if enabled else "⚪ Deactivated: ") + esc(service_name) + "\n\n🧩 <b>Service visibility</b>", InlineKeyboardMarkup(rows))
 
     elif action == "provider_sync":
         try:
@@ -208,7 +212,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await _edit(q, "This pending number was already reviewed or no longer exists.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Pending list", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
             return
         active_services = await db.list_active_services()
-        rows = [[InlineKeyboardButton(s, callback_data=f"adm:provider_approve:{item['id']}:{s}")] for s in active_services]
+        rows = [[InlineKeyboardButton(s, callback_data=f"adm:provider_approve:{item['id']}:{i}")] for i, s in enumerate(active_services)]
         rows.append([InlineKeyboardButton("❌ Reject number", callback_data=f"adm:provider_reject:{item['id']}")])
         rows.append([InlineKeyboardButton("⬅️ Pending list", callback_data="adm:provider_pending")])
         text = f"📱 <b>Review provider number #{item['id']}</b>\nNumber: <code>{esc(item['number'])}</code>\nRange/country: {esc(item['range_name'] or item['country'])}\n\nChoose the service only if this number is compatible. If no service is active, activate one in Services first."
@@ -217,10 +221,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _edit(q, text, InlineKeyboardMarkup(rows))
 
     elif action == "provider_approve":
-        raw_id, sep, service = arg.partition(":")
-        if not sep or not raw_id.isdigit() or service.casefold() not in {v.casefold() for v in await db.list_active_services()}:
+        raw_id, sep, service_index = arg.partition(":")
+        active_services = await db.list_active_services()
+        if not sep or not raw_id.isdigit() or not service_index.isdigit() or int(service_index) >= len(active_services):
             await _edit(q, "Choose an active service to approve this number.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Pending list", callback_data="adm:provider_pending")],[InlineKeyboardButton("🧩 Manage services", callback_data="adm:services")]]))
             return
+        service = active_services[int(service_index)]
         status = await db.review_provider_number(int(raw_id), service)
         msg = "✅ Number approved and added to stock." if status == "approved" else ("ℹ️ This number already exists in stock; it was marked as duplicate." if status == "duplicate" else "This pending number was already reviewed.")
         await _edit(q, msg, InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review more", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
