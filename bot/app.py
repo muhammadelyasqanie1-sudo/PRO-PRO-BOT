@@ -30,15 +30,14 @@ async def _post_init(app: Application) -> None:
     db = Database(settings.db_path)
     await db.connect()
     app.bot_data["db"] = db
+    await db.ensure_owner_points(settings.owner_id, 1000)
     await app.bot.set_my_commands(
         [BotCommand("start", "Start / menu"), BotCommand("help", "Help"), BotCommand("cancel", "Cancel current action")]
     )
     me = await app.bot.get_me()
     log.info("Started as @%s (db: %s)", me.username, settings.db_path)
-    if __import__("os").getenv("AUGESTEL_API_KEY", "").strip():
-        app.create_task(poll_augestel(app), name="augestel-otp-poller")
-    else:
-        log.warning("AUGESTEL_API_KEY is not set; OTP polling is disabled.")
+    # Poller checks managed API keys from the admin panel and optional env fallback.
+    app.create_task(poll_augestel(app), name="augestel-otp-poller")
 
 
 async def _post_shutdown(app: Application) -> None:
