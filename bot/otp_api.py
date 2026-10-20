@@ -4,6 +4,7 @@ import asyncio, hashlib, html, logging, os, re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin
 import requests
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ async def poll_augestel(app):
                             f"<pre>{html.escape(message[:2500])}</pre>")
                     for uid in set(assigned):
                         try:
-                            await app.bot.send_message(chat_id=uid, text=text)
+                            await app.bot.send_message(chat_id=uid, text=text, reply_markup=buttons)
                         except Exception as exc:
                             log.warning("Could not deliver OTP to user %s: %s", uid, type(exc).__name__)
         except asyncio.CancelledError:
