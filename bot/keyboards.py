@@ -57,6 +57,7 @@ def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMar
         rows.append([_btn("🔑 API keys", "adm:api_keys"), _btn("⭐ Points", "adm:points")])
         rows.append([_btn("📝 OTP message", "adm:otp_template"), _btn("🔘 OTP buttons", "adm:otp_buttons")])
         rows.append([_btn("👮 Admins", "adm:admins")])
+        rows.append([_btn("📝 OTP message & buttons", "adm:otp_settings")])
     rows.append([_btn(f"🛠 Maintenance: {'ON 🔴' if maintenance else 'OFF 🟢'}", "adm:maint")])
     rows.append([_btn("🔗 Support link", "adm:support"), _btn("🔗 Official link", "adm:official")])
     rows.append([_btn("✖️ Close", "adm:close")])
