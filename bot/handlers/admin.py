@@ -29,9 +29,28 @@ PROMPTS = {
     "support": "Send the support link (https://t.me/...). Send <code>-</code> to remove it.",
     "official": "Send the official channel link (https://t.me/...). Send <code>-</code> to remove it.",
     "broadcast": "Send the message to broadcast (text, photo, video, document... anything).",
-    "num_add": "Send one number as: <code>Service | Country | +Number</code>\nExample: <code>WhatsApp | United States | +12025550123</code>\nOnly add numbers you are authorized to distribute.",
+    "num_add": "Choose a service to add a number.",
 }
 CANCEL_HINT = "\n\nSend /cancel to abort."
+
+
+NUMBER_SERVICES = ["WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook", "Gmail", "Gaming", "Other Services"]
+NUMBER_COUNTRIES = ["Afghanistan", "United States", "United Kingdom", "Canada", "Germany", "France", "India", "Pakistan", "Turkey", "Russia", "Indonesia", "Brazil", "Nigeria", "Philippines", "Other"]
+
+
+def _number_service_keyboard() -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in NUMBER_SERVICES]
+    rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="adm:home")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _number_country_keyboard() -> InlineKeyboardMarkup:
+    rows = []
+    for i in range(0, len(NUMBER_COUNTRIES), 2):
+        pair = NUMBER_COUNTRIES[i:i + 2]
+        rows.append([InlineKeyboardButton(c, callback_data=f"adm:num_country:{c}") for c in pair])
+    rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
+    return InlineKeyboardMarkup(rows)
 
 
 # ---------------------------------------------------------------- panel
@@ -108,9 +127,30 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             back_keyboard(),
         )
 
-    elif action in ("user_info", "ban", "unban", "ch_add", "support", "official", "broadcast", "num_add"):
+    elif action in ("user_info", "ban", "unban", "ch_add", "support", "official", "broadcast"):
         context.user_data["state"] = action
         await _edit(q, PROMPTS[action] + CANCEL_HINT, back_keyboard())
+
+    elif action == "num_add":
+        context.user_data.pop("num_add", None)
+        await _edit(q, "📱 <b>Add a number</b>\nChoose the service:", _number_service_keyboard())
+
+    elif action == "num_service":
+        service = arg
+        context.user_data["num_add"] = {"service": service}
+        await _edit(q, f"📱 <b>Service:</b> {esc(service)}\nChoose the country:", _number_country_keyboard())
+
+    elif action == "num_country":
+        selected = context.user_data.get("num_add") or {}
+        if not selected.get("service"):
+            await _edit(q, "Please start adding the number again.", back_keyboard())
+            return
+        selected["country"] = arg
+        context.user_data["num_add"] = selected
+        context.user_data["state"] = "num_add_number"
+        service_name = esc(str(selected["service"]))
+        country_name = esc(arg)
+        await _edit(q, f"📱 <b>{service_name}</b> · <b>{country_name}</b>\nSend the phone number now.\nIf it does not start with 0, a leading 0 will be added. Numbers starting with + are preserved.\n\nSend /cancel to abort.", back_keyboard())
 
     elif action == "num_stock":
         numbers = await db.list_available_numbers()
@@ -218,21 +258,31 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
     done = True
     reply = ""
 
-    if state == "num_add":
-        parts = [part.strip() for part in text.split("|", 2)]
-        if len(parts) != 3 or not all(parts):
-            await msg.reply_text("Format: Service | Country | +Number\nTry again or /cancel.")
+    if state == "num_add_number":
+        selected = context.user_data.get("num_add") or {}
+        service = selected.get("service")
+        country = selected.get("country")
+        number = text.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        if not service or not country:
+            context.user_data.pop("state", None)
+            context.user_data.pop("num_add", None)
+            await msg.reply_text("Please start adding the number again.", reply_markup=back_keyboard())
             return
-        service, country, number = parts
-        if len(number) < 7 or len(number) > 20 or not any(ch.isdigit() for ch in number):
-            await msg.reply_text("Number looks invalid. Send it again or /cancel.")
+        digits = "".join(ch for ch in number if ch.isdigit())
+        if len(digits) < 7 or len(digits) > 20 or any(ch not in "+0123456789" for ch in number) or number.count("+") > 1 or ("+" in number and not number.startswith("+")):
+            await msg.reply_text("Number looks invalid. Send digits, optionally starting with +. Try again or /cancel.")
             return
-        ok = await db.add_phone_number(service[:40], country[:60], number[:30])
+        # Store phone numbers as text to preserve leading zeros.
+        # Add a leading zero to local-format numbers only; keep international + numbers unchanged.
+        if not number.startswith("0") and not number.startswith("+"):
+            number = "0" + number
+        ok = await db.add_phone_number(str(service)[:40], str(country)[:60], number[:30])
         if not ok:
             await msg.reply_text("That number already exists. Send another or /cancel.")
             return
         context.user_data.pop("state", None)
-        await msg.reply_text("✅ Number added to stock.", reply_markup=back_keyboard())
+        context.user_data.pop("num_add", None)
+        await msg.reply_text(f"✅ Number added to stock.\nService: <b>{esc(str(service))}</b>\nCountry: <b>{esc(str(country))}</b>\nNumber: <code>{esc(number)}</code>", reply_markup=back_keyboard())
         return
 
     if state in ("user_info", "ban", "unban"):
