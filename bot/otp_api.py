@@ -52,41 +52,73 @@ def _fetch(base, key):
 
 async def poll_augestel(app):
     base = os.getenv("AUGESTEL_API_BASE", "https://augestel.com/api/v1/iprn").strip()
-    key = os.getenv("AUGESTEL_API_KEY", "").strip()
-    if not key: return
-    log.info("Augestel OTP polling enabled; endpoint=%s", base.rstrip("/") + "/" + os.getenv("AUGESTEL_MESSAGES_PATH", "messages").lstrip("/"))
+    env_key = os.getenv("AUGESTEL_API_KEY", "").strip()
+    log.info("Augestel OTP polling task started; API keys can be managed in the admin panel.")
     while True:
         try:
-            payload = await asyncio.to_thread(_fetch, base, key)
             db = app.bot_data["db"]
+            managed = await db.list_active_api_keys()
+            keys = [{"name": x["name"], "api_key": x["api_key"]} for x in managed]
+            if not keys and env_key:
+                keys = [{"name": "Railway environment key", "api_key": env_key}]
+            if not keys:
+                await asyncio.sleep(15)
+                continue
+
+            payload = None
+            used_key = None
+            last_error = None
+            # Try active keys in order, stopping at the first successful response.
+            # This avoids unnecessary duplicate API requests on every polling cycle.
+            for item in keys:
+                try:
+                    payload = await asyncio.to_thread(_fetch, base, item["api_key"])
+                    used_key = item["name"]
+                    break
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    last_error = exc
+                    log.warning("Augestel key '%s' failed (%s); trying the next active key if available.",
+                                str(item["name"])[:60], type(exc).__name__)
+            if payload is None:
+                if last_error:
+                    log.warning("All active Augestel API keys failed this cycle (%s).", type(last_error).__name__)
+                await asyncio.sleep(15)
+                continue
+
             for rec in _records(payload):
                 number = _field(rec, "number", "phone_number", "phone", "msisdn")
                 message = _field(rec, "message", "sms", "text", "body")
-                if not number or not message: continue
+                if not number or not message:
+                    continue
                 received = _field(rec, "received_at", "created_at", "time", "timestamp", "date") or datetime.now(timezone.utc).isoformat()
                 source = _field(rec, "source", "service", "app", "sender") or "SMS"
                 raw_id = _field(rec, "id", "message_id")
                 dedupe = raw_id or hashlib.sha256(f"{number}|{received}|{source}|{message}".encode()).hexdigest()
-                if not await db.save_otp_once(dedupe, number, message, received): continue
+                if not await db.save_otp_once(dedupe, number, message, received):
+                    continue
                 assigned = await db.assigned_users_for_number(number)
-                # Normalize leading + / spaces in provider and inventory numbers.
                 if not assigned:
                     for candidate in await db._all("SELECT number, assigned_user_id FROM phone_numbers WHERE status='assigned' AND assigned_user_id IS NOT NULL"):
-                        if _digits(candidate["number"]) == _digits(number): assigned.append(int(candidate["assigned_user_id"]))
+                        if _digits(candidate["number"]) == _digits(number):
+                            assigned.append(int(candidate["assigned_user_id"]))
                 if assigned:
                     code = _otp(message)
-                    text = ("🔐 <b>New OTP received</b>\n\n"
-                            f"📱 Service: <b>{html.escape(source)}</b>\n"
-                            f"📞 Number: <code>{html.escape(number)}</code>\n"
-                            f"🔢 Code: <code>{html.escape(code)}</code>\n"
-                            f"🕒 Time: {html.escape(received)}\n\n"
+                    text = ("🔐 <b>New OTP received</b>\\n\\n"
+                            f"📱 Service: <b>{html.escape(source)}</b>\\n"
+                            f"📞 Number: <code>{html.escape(number)}</code>\\n"
+                            f"🔢 Code: <code>{html.escape(code)}</code>\\n"
+                            f"🕒 Time: {html.escape(received)}\\n\\n"
                             f"<pre>{html.escape(message[:2500])}</pre>")
                     for uid in set(assigned):
-                        try: await app.bot.send_message(chat_id=uid, text=text)
-                        except Exception as exc: log.warning("Could not deliver OTP to user %s: %s", uid, exc)
+                        try:
+                            await app.bot.send_message(chat_id=uid, text=text)
+                        except Exception as exc:
+                            log.warning("Could not deliver OTP to user %s: %s", uid, type(exc).__name__)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            # Do not log API URLs with query strings, response bodies, or credentials.
-            log.warning("Augestel polling failed (%s). Check API base/path/key and provider response format.", type(exc).__name__)
+            # Never log keys, query strings, or provider response bodies.
+            log.warning("Augestel polling cycle failed (%s).", type(exc).__name__)
         await asyncio.sleep(15)
