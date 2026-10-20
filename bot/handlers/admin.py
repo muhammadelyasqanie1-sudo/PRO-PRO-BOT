@@ -144,6 +144,26 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         else:
             await _edit(q, PROMPTS[action] + CANCEL_HINT, back_keyboard())
 
+    elif action == "otp_settings":
+        rows = [
+            [InlineKeyboardButton("📝 Edit OTP message", callback_data="adm:otp_template")],
+            [InlineKeyboardButton("📋 Copy button label", callback_data="adm:otp_copy_label")],
+            [InlineKeyboardButton("🤖 Bot button label", callback_data="adm:otp_bot_label")],
+            [InlineKeyboardButton("🔗 Bot button link", callback_data="adm:otp_bot_link")],
+            [InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")],
+        ]
+        await _edit(q, "📝 <b>OTP message settings</b>\\n\\nPlaceholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}\\nHTML formatting is supported.", InlineKeyboardMarkup(rows))
+
+    elif action in ("otp_template", "otp_copy_label", "otp_bot_label", "otp_bot_link"):
+        context.user_data["state"] = action
+        prompts = {
+            "otp_template": "Send the new OTP message template. Placeholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}",
+            "otp_copy_label": "Send the Copy Code button text.",
+            "otp_bot_label": "Send the NUM BOT button text.",
+            "otp_bot_link": "Send the bot link starting with https://t.me/",
+        }
+        await _edit(q, prompts[action] + CANCEL_HINT, back_keyboard())
+
     elif action == "num_add":
         context.user_data.pop("num_add", None)
         services = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v]))
@@ -300,6 +320,20 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
         await db.set_setting("otp_button_config", text)
         context.user_data.pop("state", None)
         await msg.reply_text("✅ OTP button settings saved.", reply_markup=back_keyboard())
+        return
+
+    if state in ("otp_template", "otp_copy_label", "otp_bot_label", "otp_bot_link"):
+        if len(text) > 3000 or len(text) < 2:
+            await msg.reply_text("Please send text between 2 and 3000 characters.")
+            return
+        if state == "otp_bot_link" and not text.startswith("https://t.me/"):
+            await msg.reply_text("The bot link must start with https://t.me/")
+            return
+        key = {"otp_template": "otp_message_template", "otp_copy_label": "otp_copy_label",
+               "otp_bot_label": "otp_bot_label", "otp_bot_link": "otp_bot_link"}[state]
+        await db.set_setting(key, text)
+        context.user_data.pop("state", None)
+        await msg.reply_text("✅ OTP setting saved.", reply_markup=back_keyboard())
         return
 
     if state in ("service_add", "country_add"):
