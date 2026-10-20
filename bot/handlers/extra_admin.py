@@ -67,7 +67,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, action
         ]
         await q.edit_message_text(
             f"⭐ <b>Points management</b>\n\n👑 Owner balance: <b>{balance}</b>\n"
-            "🎁 Referral reward: <b>1 point per valid invite</b>",
+            "🎁 Referral reward: <b>10 points per valid invite</b>",
             reply_markup=InlineKeyboardMarkup(rows),
         )
     elif action in ("points_add", "points_sub"):
