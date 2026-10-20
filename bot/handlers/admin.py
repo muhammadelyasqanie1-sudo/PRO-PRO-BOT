@@ -187,7 +187,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             result = await sync_augestel_numbers(db)
         except Exception as exc:
             log.warning("Augestel inventory sync failed (%s).", type(exc).__name__)
-            await _edit(q, "⚠️ Augestel sync failed. Check the API key and provider API status, then try again.", InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry sync", callback_data="adm:provider_sync")],[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+            error_text = str(exc) if isinstance(exc, RuntimeError) and str(exc).startswith("Please wait") else "⚠️ Augestel sync failed. Check the API key and provider API status, then try again."
+            await _edit(q, esc(error_text), InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry sync", callback_data="adm:provider_sync")],[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
             return
         await _edit(q, f"✅ <b>Augestel page {result['page']}/{result['last_page']} fetched</b>\nNew pending numbers: <b>{result['added']}</b>\nAlready imported: <b>{result['duplicates']}</b>\nReceived: {result['received']}\n\nNo number is visible to users until you approve it and assign a service. Next page: {result['next_page']}.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("🔄 Fetch next page", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
 
