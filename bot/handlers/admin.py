@@ -133,9 +133,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             back_keyboard(),
         )
 
-    elif action in ("user_info", "ban", "unban", "ch_add", "support", "official", "broadcast"):
+    elif action in ("user_info", "ban", "unban", "ch_add", "support", "official", "broadcast", "otp_template", "otp_buttons"):
         context.user_data["state"] = action
-        await _edit(q, PROMPTS[action] + CANCEL_HINT, back_keyboard())
+        if action == "otp_template":
+            current = await db.get_setting("otp_template", "🔐 <b>NUM BOT</b>\\n📱 {service}\\n🌍 {country}\\n📞 <code>{number}</code>\\n🔢 Code: <code>{code}</code>\\n🕒 {time}\\n🗣 {language}\\n<pre>{message}</pre>")
+            await _edit(q, "📝 <b>Edit OTP message</b>\\nSend the full template. Placeholders: {service}, {country}, {number}, {code}, {time}, {language}, {message}. Must include {number} and {code}.\\n\\nCurrent template:\\n" + esc(current), back_keyboard())
+        elif action == "otp_buttons":
+            current = await db.get_setting("otp_button_config", "📋 Copy code | 🤖 NUM BOT | https://t.me/")
+            await _edit(q, "🔘 <b>Edit OTP buttons</b>\\nSend: <code>Copy label | Bot label | https://t.me/YourBot</code>\\nUse - instead of link to disable it.\\n\\nCurrent: " + esc(current), back_keyboard())
+        else:
+            await _edit(q, PROMPTS[action] + CANCEL_HINT, back_keyboard())
 
     elif action == "num_add":
         context.user_data.pop("num_add", None)
@@ -275,6 +282,25 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
 
     done = True
     reply = ""
+
+    if state == "otp_template":
+        if len(text) > 3000 or "{number}" not in text or "{code}" not in text:
+            await msg.reply_text("Template must be under 3000 characters and include {number} and {code}.")
+            return
+        await db.set_setting("otp_template", text)
+        context.user_data.pop("state", None)
+        await msg.reply_text("✅ OTP message template saved.", reply_markup=back_keyboard())
+        return
+
+    if state == "otp_buttons":
+        parts = [part.strip() for part in text.split("|")]
+        if len(parts) != 3 or not parts[0] or not parts[1] or (parts[2] != "-" and not valid_url(parts[2])):
+            await msg.reply_text("Format: Copy label | Bot label | https://t.me/YourBot (or -)")
+            return
+        await db.set_setting("otp_button_config", text)
+        context.user_data.pop("state", None)
+        await msg.reply_text("✅ OTP button settings saved.", reply_markup=back_keyboard())
+        return
 
     if state in ("service_add", "country_add"):
         if len(text) < 2 or len(text) > 40:
