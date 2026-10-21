@@ -115,6 +115,7 @@ async def me(request: web.Request) -> web.Response:
             "lang": row.get("lang") or "en",
             "points": int(row.get("points") or 0),
             "referrals": int(row.get("referrals") or 0),
+            "is_admin": auth["user_id"] == session["app"].bot_data["settings"].owner_id or await session["db"].is_admin(auth["user_id"]),
         },
     })
 
@@ -219,6 +220,88 @@ async def request_number(request: web.Request) -> web.Response:
         return _json({"ok": False, "error": "No numbers are available for this selection right now."}, 409)
 
 
+async def admin_overview(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    uid = session["auth"]["user_id"]
+    settings = session["app"].bot_data["settings"]
+    db = session["db"]
+    if uid != settings.owner_id and not await db.is_admin(uid):
+        return _json({"ok": False, "error": "Administrator access required."}, 403)
+    stats = await db.stats()
+    inventory = await db._all(
+        "SELECT service, country, COUNT(*) AS count FROM phone_numbers "
+        "WHERE status='available' GROUP BY service, country ORDER BY service, country"
+    )
+    pending = await db._one("SELECT COUNT(*) AS count FROM pending_provider_numbers WHERE status='pending'")
+    return _json({
+        "ok": True,
+        "stats": {
+            "users": int(stats.get("total") or 0),
+            "active_users": int(stats.get("active") or 0),
+            "banned_users": int(stats.get("banned") or 0),
+            "available_numbers": sum(int(row["count"]) for row in inventory),
+            "pending_provider_numbers": int((pending or {}).get("count") or 0),
+        },
+        "active_services": await db.list_active_services(),
+        "services": await db.list_phone_number_services(),
+        "inventory": inventory,
+    })
+
+
+async def admin_add_number(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    uid = session["auth"]["user_id"]
+    settings = session["app"].bot_data["settings"]
+    db = session["db"]
+    if uid != settings.owner_id and not await db.is_admin(uid):
+        return _json({"ok": False, "error": "Administrator access required."}, 403)
+    try:
+        payload = await request.json()
+        service = str(payload.get("service", "")).strip()[:40]
+        country = str(payload.get("country", "")).strip()[:60]
+        raw_number = str(payload.get("number", "")).strip()
+        activate = payload.get("activate", True) is not False
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return _json({"ok": False, "error": "Invalid request body."}, 400)
+    import re
+    number = re.sub(r"[\\s().-]", "", raw_number)
+    if not service or not country or not re.fullmatch(r"\\+?\\d{7,20}", number):
+        return _json({"ok": False, "error": "Enter a service, country and valid international number."}, 400)
+    if not await db.add_phone_number(service, country, number):
+        return _json({"ok": False, "error": "This number already exists in the inventory."}, 409)
+    if activate:
+        active = {name.casefold() for name in await db.list_active_services()}
+        if service.casefold() not in active:
+            await db.toggle_service_active(service)
+    return _json({"ok": True, "message": "Number added to inventory.", "number": number}, 201)
+
+
+async def admin_toggle_service(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    uid = session["auth"]["user_id"]
+    settings = session["app"].bot_data["settings"]
+    db = session["db"]
+    if uid != settings.owner_id and not await db.is_admin(uid):
+        return _json({"ok": False, "error": "Administrator access required."}, 403)
+    try:
+        payload = await request.json()
+        service = str(payload.get("service", "")).strip()[:40]
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return _json({"ok": False, "error": "Invalid request body."}, 400)
+    services = await db.list_phone_number_services()
+    canonical = next((item for item in services if item.casefold() == service.casefold()), None)
+    if not canonical:
+        return _json({"ok": False, "error": "Service not found in inventory."}, 404)
+    active = await db.toggle_service_active(canonical)
+    return _json({"ok": True, "service": canonical, "active": active})
+
+
 async def start_web_server(telegram_app) -> web.AppRunner | None:
     """Start the Mini App server on Railway's PORT (or WEB_PORT locally)."""
     port_text = os.getenv("PORT", os.getenv("WEB_PORT", "8080")).strip()
@@ -235,6 +318,9 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server.router.add_get("/api/catalog", catalog)
     server.router.add_get("/api/sessions", sessions)
     server.router.add_post("/api/number", request_number)
+    server.router.add_get("/api/admin/overview", admin_overview)
+    server.router.add_post("/api/admin/number", admin_add_number)
+    server.router.add_post("/api/admin/service", admin_toggle_service)
     runner = web.AppRunner(server, access_log=None)
     await runner.setup()
     host = os.getenv("WEB_HOST", "0.0.0.0")
