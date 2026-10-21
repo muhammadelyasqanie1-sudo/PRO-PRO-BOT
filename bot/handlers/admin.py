@@ -62,9 +62,10 @@ async def _render_panel(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> tup
     maintenance = await db.get_setting("maintenance") == "1"
     stats = await db.stats()
     text = (
-        "⚙️ <b>Admin panel</b>\n\n"
-        f"👥 Users: <b>{stats['total']}</b>  ·  🟢 Active: <b>{stats['active']}</b>\n"
-        f"🛠 Maintenance: <b>{'ON' if maintenance else 'OFF'}</b>"
+        "⚙️ <b>Admin panel / پنل مدیریت</b>\n\n"
+        f"👥 Users / کاربران: <b>{stats['total']}</b>  ·  🟢 Active / فعال: <b>{stats['active']}</b>\n"
+        f"🛠 Maintenance / حالت تعمیر: <b>{'ON / روشن' if maintenance else 'OFF / خاموش'}</b>\n\n"
+        "Choose a section / یک بخش را انتخاب کنید."
     )
     return text, admin_panel_keyboard(maintenance, is_owner(context, user_id))
 
@@ -165,6 +166,18 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         }
         await _edit(q, prompts[action] + CANCEL_HINT, back_keyboard())
 
+    elif action == "countries":
+        custom = [v.strip() for v in (await db.get_setting("custom_countries")).split("\n") if v.strip()]
+        rows = [[InlineKeyboardButton("🌍 " + name, callback_data="adm:country_info")] for name in custom[:30]]
+        if not rows:
+            rows.append([InlineKeyboardButton("No custom countries / کشور سفارشی نیست", callback_data="adm:country_info")])
+        rows.append([InlineKeyboardButton("➕ Add country / افزودن کشور", callback_data="adm:country_add")])
+        rows.append([InlineKeyboardButton("⬅️ Admin panel / پنل مدیریت", callback_data="adm:home")])
+        await _edit(q, "🌍 <b>Country management / مدیریت کشورها</b>\n\nBuilt-in countries are available when adding numbers. Add extra country names here; / نام کشور جدید را اضافه کنید.", InlineKeyboardMarkup(rows))
+
+    elif action == "country_info":
+        await _edit(q, "Custom countries / کشورهای سفارشی are used in the Add Number flow. / در بخش افزودن شماره استفاده می‌شوند.", back_keyboard())
+
     elif action == "services":
         candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
         active = {v.casefold() for v in await db.list_active_services()}
@@ -246,7 +259,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif action == "num_service":
         service = arg
         context.user_data["num_add"] = {"service": service}
-        await _edit(q, f"📱 <b>Service:</b> {esc(service)}\nChoose the country:", _number_country_keyboard())
+        countries = list(dict.fromkeys(NUMBER_COUNTRIES + [v.strip() for v in (await db.get_setting("custom_countries")).split("\n") if v.strip()]))
+        rows = []
+        for i in range(0, len(countries), 2):
+            rows.append([InlineKeyboardButton(name, callback_data=f"adm:num_country:{name}") for name in countries[i:i + 2]])
+        rows.append([InlineKeyboardButton("➕ Add country / افزودن کشور", callback_data="adm:country_add")])
+        rows.append([InlineKeyboardButton("⬅️ Admin panel / پنل مدیریت", callback_data="adm:home")])
+        await _edit(q, f"📱 <b>Service / سرویس:</b> {esc(service)}\nChoose country / کشور را انتخاب کنید:", InlineKeyboardMarkup(rows))
 
     elif action in ("service_add", "country_add"):
         context.user_data["state"] = action
