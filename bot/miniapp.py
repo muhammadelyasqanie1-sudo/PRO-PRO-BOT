@@ -20,6 +20,7 @@ WEB_ROOT = Path(__file__).resolve().parent.parent / "webapp"
 MAX_INIT_AGE_SECONDS = 60 * 60 * 24
 _request_times: dict[int, float] = {}
 _request_locks: dict[int, asyncio.Lock] = {}
+_membership_cache: dict[int, tuple[float, bool]] = {}
 
 
 def validate_init_data(init_data: str, bot_token: str, now: int | None = None) -> dict:
@@ -78,21 +79,34 @@ async def _telegram_user(request: web.Request) -> tuple[dict | None, web.Respons
     # Match the bot guard: administrators can still access the Mini App while configuring force-join.
     if auth["user_id"] == settings.owner_id or await db.is_admin(auth["user_id"]):
         return {"auth": auth, "row": row, "db": db, "app": app}, None
-    # Enforce the same required-channel gate for API calls, not just bot messages.
+    # Cache successful checks briefly: the UI refreshes several endpoints at once.
+    channels = await db.list_channels()
+    cached = _membership_cache.get(auth["user_id"])
+    if cached and time.monotonic() - cached[0] < 120:
+        if cached[1]:
+            return {"auth": auth, "row": row, "db": db, "app": app}, None
+        return None, _json({
+            "ok": False,
+            "error": "Join the required channel(s) in the bot before using the Mini App.",
+            "join_required": True,
+            "channels": [{"title": c["title"], "link": c["link"]} for c in channels],
+        }, 403)
     try:
-        for channel in await db.list_channels():
+        for channel in channels:
             member = await app.bot.get_chat_member(chat_id=channel["chat_id"], user_id=auth["user_id"])
             if member.status in ("left", "kicked") or (member.status == "restricted" and not getattr(member, "is_member", True)):
+                _membership_cache[auth["user_id"]] = (time.monotonic(), False)
                 return None, _json({
                     "ok": False,
                     "error": "Join the required channel(s) in the bot before using the Mini App.",
                     "join_required": True,
-                    "channels": [{"title": c["title"], "link": c["link"]} for c in await db.list_channels()],
+                    "channels": [{"title": c["title"], "link": c["link"]} for c in channels],
                 }, 403)
     except TelegramError:
         # If Telegram cannot verify a configured channel, fail closed instead of bypassing the gate.
-        if await db.list_channels():
+        if channels:
             return None, _json({"ok": False, "error": "Membership verification is temporarily unavailable. Try again shortly."}, 503)
+    _membership_cache[auth["user_id"]] = (time.monotonic(), True)
     return {"auth": auth, "row": row, "db": db, "app": app}, None
 
 
