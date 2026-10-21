@@ -262,7 +262,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data["state"] = "num_add_number"
         service_name = esc(str(selected["service"]))
         country_name = esc(arg)
-        await _edit(q, f"📱 <b>{service_name}</b> · <b>{country_name}</b>\nSend the phone number now.\nIf it does not start with 0, a leading 0 will be added. Numbers starting with + are preserved.\n\nSend /cancel to abort.", back_keyboard())
+        await _edit(q, f"📱 <b>{service_name}</b> · <b>{country_name}</b>\nSend one phone number, paste multiple numbers (one per line), or upload a UTF-8 .txt file with one number per line.\nNumbers starting with + are preserved; local numbers get a leading 0. Duplicates and invalid lines are skipped in bulk imports.\n\nSend /cancel to abort.", back_keyboard())
 
     elif action == "num_stock":
         numbers = await db.list_available_numbers()
