@@ -8,26 +8,42 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, CopyTextButton
 log = logging.getLogger(__name__)
 
 def _records(payload):
+    """Normalize common Augestel API response envelopes into record dictionaries."""
     if isinstance(payload, list):
         for item in payload:
-            if isinstance(item, dict): yield item
+            if isinstance(item, dict):
+                yield item
+            elif isinstance(item, (list, tuple)) and len(item) >= 5:
+                yield {"received_at": item[0], "country": item[1], "number": item[2], "source": item[3], "message": item[4]}
         return
-    if not isinstance(payload, dict): return
-    for key in ("messages", "data", "results", "items"):
+    if not isinstance(payload, dict):
+        return
+
+    # Some API versions wrap the actual response in data/result/payload objects.
+    for key in ("messages", "numbers", "results", "items", "records", "data", "result", "payload"):
         val = payload.get(key)
         if isinstance(val, list):
-            for item in val:
-                if isinstance(item, dict): yield item
+            yield from _records(val)
             return
+        if isinstance(val, dict):
+            # Prefer known collection keys inside the envelope, otherwise treat it
+            # as a single record if it already contains a recognizable field.
+            nested_collection = any(k in val for k in (
+                "messages", "numbers", "results", "items", "records", "data", "aaData"
+            ))
+            if nested_collection:
+                yield from _records(val)
+                return
+            if any(k in val for k in ("number", "phone_number", "phone", "msisdn", "message", "sms", "text", "body")):
+                yield val
+                return
+
     # Some Augestel dashboard endpoints return DataTables aaData rows.
     rows = payload.get("aaData")
     if isinstance(rows, list):
-        for row in rows:
-            if isinstance(row, (list, tuple)) and len(row) >= 5:
-                yield {"received_at": row[0], "country": row[1], "number": row[2], "source": row[3], "message": row[4]}
-            elif isinstance(row, dict): yield row
+        yield from _records(rows)
         return
-    if any(k in payload for k in ("message", "sms", "text")):
+    if any(k in payload for k in ("number", "phone_number", "phone", "msisdn", "message", "sms", "text", "body")):
         yield payload
 
 def _field(record, *keys):
