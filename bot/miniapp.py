@@ -82,7 +82,7 @@ async def _telegram_user(request: web.Request) -> tuple[dict | None, web.Respons
     # Cache successful checks briefly: the UI refreshes several endpoints at once.
     channels = await db.list_channels()
     cached = _membership_cache.get(auth["user_id"])
-    if cached and time.monotonic() - cached[0] < 120:
+    if cached and time.monotonic() - cached[0] < (120 if cached[1] else 5):
         if cached[1]:
             return {"auth": auth, "row": row, "db": db, "app": app}, None
         return None, _json({
