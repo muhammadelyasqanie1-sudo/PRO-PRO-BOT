@@ -79,7 +79,7 @@ async def _telegram_user(request: web.Request) -> tuple[dict | None, web.Respons
     try:
         for channel in await db.list_channels():
             member = await app.bot.get_chat_member(chat_id=channel["chat_id"], user_id=auth["user_id"])
-            if member.status in ("left", "kicked"):
+            if member.status in ("left", "kicked") or (member.status == "restricted" and not getattr(member, "is_member", True)):
                 return None, _json({
                     "ok": False,
                     "error": "Join the required channel(s) in the bot before using the Mini App.",
@@ -152,28 +152,30 @@ async def sessions(request: web.Request) -> web.Response:
     if error:
         return error
     uid = session["auth"]["user_id"]
-    rows = await session["db"]._all(
-        "SELECT p.id, p.service, p.country, p.number, p.created_at, "
-        "o.message AS otp_message, o.received_at AS otp_received_at "
-        "FROM phone_numbers p LEFT JOIN otp_messages o ON o.number=p.number "
-        "WHERE p.assigned_user_id=? AND p.status='assigned' "
-        "ORDER BY p.id DESC, o.received_at DESC LIMIT 100",
+    assigned = await session["db"]._all(
+        "SELECT id, service, country, number, created_at FROM phone_numbers "
+        "WHERE assigned_user_id=? AND status='assigned' ORDER BY id DESC LIMIT 100",
         (uid,),
     )
-    latest: dict[int, dict] = {}
-    for item in rows:
-        number_id = int(item["id"])
-        if number_id not in latest:
-            latest[number_id] = {
-                "id": number_id,
-                "service": item["service"],
-                "country": item["country"],
-                "number": item["number"],
-                "created_at": item["created_at"],
-                "otp_message": item.get("otp_message"),
-                "otp_received_at": item.get("otp_received_at"),
-            }
-    return _json({"ok": True, "sessions": list(latest.values())})
+    otp_rows = await session["db"]._all(
+        "SELECT number, message, received_at FROM otp_messages ORDER BY received_at DESC LIMIT 500"
+    )
+    def digits(value: str) -> str:
+        return "".join(ch for ch in (value or "") if ch.isdigit())
+    sessions_out = []
+    for item in assigned:
+        normalized = digits(item["number"])
+        otp = next((row for row in otp_rows if digits(row["number"]) == normalized), None)
+        sessions_out.append({
+            "id": int(item["id"]),
+            "service": item["service"],
+            "country": item["country"],
+            "number": item["number"],
+            "created_at": item["created_at"],
+            "otp_message": otp["message"] if otp else None,
+            "otp_received_at": otp["received_at"] if otp else None,
+        })
+    return _json({"ok": True, "sessions": sessions_out})
 
 
 async def request_number(request: web.Request) -> web.Response:
