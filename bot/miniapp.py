@@ -169,7 +169,7 @@ async def sessions(request: web.Request) -> web.Response:
     sessions_out = []
     for item in assigned:
         normalized = digits(item["number"])
-        otp = next((row for row in otp_rows if digits(row["number"]) == normalized), None)
+        otp = next((row for row in otp_rows if normalized and digits(row["number"]) == normalized), None)
         sessions_out.append({
             "id": int(item["id"]),
             "service": item["service"],
@@ -272,6 +272,8 @@ async def admin_add_number(request: web.Request) -> web.Response:
         return _json({"ok": False, "error": "Invalid request body."}, 400)
     import re
     number = re.sub(r"[\s().-]", "", raw_number)
+    known_services = await db.list_phone_number_services()
+    service = next((name for name in known_services if name.casefold() == service.casefold()), service)
     if not service or not country or not re.fullmatch(r"\+?\d{7,20}", number):
         return _json({"ok": False, "error": "Enter a service, country and valid international number."}, 400)
     if not await db.add_phone_number(service, country, number):
