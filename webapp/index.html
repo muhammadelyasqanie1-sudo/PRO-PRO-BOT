@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>NUM BOT • Premium</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#131b30;--panel2:#18233c;--line:rgba(255,255,255,.09);--text:#f4f7ff;--muted:#a7b2cc;--blue:#7c9cff;--mint:#5de0c0;--gold:#f4c66a;--danger:#ff8795;--radius:22px}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% -10%,#263d71 0,transparent 38%),radial-gradient(ellipse at 100% 5%,#183e43 0,transparent 30%),var(--bg);color:var(--text);font:15px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;padding:env(safe-area-inset-top) 0 calc(28px + env(safe-area-inset-bottom))}
+button,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:wait}.shell{width:min(100%,760px);margin:auto;padding:18px 16px 0}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 22px}.brand{display:flex;align-items:center;gap:11px}.logo{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(140deg,#8ba7ff,#5de0c0);color:#0b1020;font-size:24px;font-weight:900;box-shadow:0 8px 30px #5c87ff33}.brand h1{font-size:18px;margin:0;letter-spacing:.04em}.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}.lang{border:1px solid var(--line);background:#ffffff0a;color:var(--text);border-radius:12px;padding:9px 11px}.hero{border:1px solid #9db4ff25;background:linear-gradient(135deg,#25365a 0%,#182a3c 55%,#183e42 100%);border-radius:28px;padding:22px;position:relative;overflow:hidden;box-shadow:0 18px 48px #0003}.hero:after{content:"✦";position:absolute;right:18px;top:-30px;font-size:145px;color:#ffffff0a;pointer-events:none}.eyebrow{color:#b7c8ff;text-transform:uppercase;font-size:11px;letter-spacing:.14em;font-weight:800}.hero h2{font-size:25px;line-height:1.2;margin:9px 0}.hero p{margin:8px 0 18px;color:#d0d9ef;max-width:440px;font-size:13px}.wallet{display:flex;justify-content:space-between;align-items:end;gap:12px;padding-top:15px;border-top:1px solid #ffffff20}.wallet small{display:block;color:#c4cee5;font-size:12px}.balance{font-size:26px;font-weight:850;letter-spacing:-.03em}.coin{color:var(--gold)}.pill{border:1px solid #ffffff24;background:#ffffff0d;padding:8px 11px;border-radius:12px;color:#f6f8ff;font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 26px}.stat{background:#ffffff08;border:1px solid var(--line);border-radius:17px;padding:13px}.stat strong{display:block;font-size:19px;overflow-wrap:anywhere}.stat span{font-size:11px;color:var(--muted)}.section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:25px 2px 12px}.section-head h3{font-size:17px;margin:0}.section-head p{font-size:12px;color:var(--muted);margin:3px 0 0}.refresh{background:transparent;color:var(--blue);border:0;font-weight:700;padding:8px}.search{width:100%;border:1px solid var(--line);background:#ffffff08;border-radius:15px;color:var(--text);padding:13px 14px;margin:0 0 12px;outline:none}.search:focus,select:focus{border-color:#7c9cff88}.services{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.service{background:linear-gradient(155deg,#18233b,#11192c);border:1px solid var(--line);border-radius:19px;padding:15px;text-align:left;color:var(--text);min-width:0;transition:transform .15s,border-color .15s}.service:active{transform:scale(.985)}.service.selected{border-color:#7c9cffb0;box-shadow:0 0 0 1px #7c9cff44 inset}.service-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.service-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:12px;background:#7c9cff1d;font-size:19px}.count{font-size:11px;color:var(--mint);white-space:nowrap}.service strong{display:block;margin:11px 0 3px;font-size:14px}.service small{display:block;color:var(--muted);font-size:11px}.select-wrap{display:grid;gap:8px;margin-top:14px}.select-wrap label{font-size:12px;color:var(--muted)}select{width:100%;padding:13px 14px;border-radius:14px;background:#121b30;color:var(--text);border:1px solid var(--line);outline:none}.primary{width:100%;border:0;border-radius:15px;padding:14px 16px;font-weight:850;color:#07141a;background:linear-gradient(100deg,var(--mint),#a8f0d6);box-shadow:0 9px 25px #5de0c01a;margin-top:12px}.hint{color:var(--muted);font-size:12px;margin:9px 2px 0}.sessions{display:grid;gap:10px}.session{background:#ffffff07;border:1px solid var(--line);border-radius:18px;padding:15px}.session-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.session strong{font-size:14px}.number{font-size:17px;font-weight:800;letter-spacing:.02em;margin-top:7px}.meta{color:var(--muted);font-size:11px;margin-top:3px}.otp{background:#0a1426;border:1px dashed #5de0c055;border-radius:13px;padding:12px;margin-top:12px;overflow-wrap:anywhere;font-size:12px;white-space:pre-wrap}.otp b{color:var(--mint)}.empty{border:1px dashed var(--line);border-radius:18px;padding:24px 18px;text-align:center;color:var(--muted);font-size:13px}.empty span{display:block;font-size:28px;margin-bottom:8px}.toast{position:fixed;left:16px;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:10;max-width:520px;margin:auto;background:#202b43;border:1px solid var(--line);box-shadow:0 12px 36px #0008;padding:13px 15px;border-radius:15px;display:none;font-size:13px}.toast.show{display:block}.loading{opacity:.55;pointer-events:none}.footer{text-align:center;color:#7f8ba6;font-size:11px;padding:24px 0 8px}.skeleton{height:90px;border-radius:18px;background:linear-gradient(100deg,#ffffff08,#ffffff14,#ffffff08);background-size:200% 100%;animation:shine 1.3s infinite}@keyframes shine{to{background-position:-200% 0}}[dir=rtl] .section-head,[dir=rtl] .top{direction:rtl}[dir=rtl] .service{text-align:right}[dir=rtl] .hero:after{right:auto;left:18px}@media(min-width:620px){.shell{padding:24px 22px 0}.hero{padding:28px}.hero h2{font-size:30px}.services{grid-template-columns:repeat(3,minmax(0,1fr))}.stats{gap:13px}.stat{padding:16px}}
+</style>
+</head>
+<body>
+<div class="shell" id="app">
+  <header class="top">
+    <div class="brand"><div class="logo">N</div><div><h1>NUM BOT</h1><p data-i18n="subtitle">Premium number hub</p></div></div>
+    <button class="lang" id="langBtn" type="button">دری / EN</button>
+  </header>
+  <section class="hero">
+    <div class="eyebrow" data-i18n="eyebrow">YOUR NUMBER WORKSPACE</div>
+    <h2><span data-i18n="hello">Welcome back</span><span id="firstName"></span> ✦</h2>
+    <p data-i18n="heroText">Choose a service, pick a country, and manage your assigned numbers in one place.</p>
+    <div class="wallet"><div><small data-i18n="wallet">BUY COIN WALLET</small><div class="balance"><span class="coin">◈</span> <span id="balance">—</span></div></div><button class="pill" id="refreshBtn" type="button" data-i18n="refresh">↻ Refresh data</button></div>
+  </section>
+  <div class="stats">
+    <div class="stat"><strong id="availableCount">—</strong><span data-i18n="available">Numbers available</span></div>
+    <div class="stat"><strong id="serviceCount">—</strong><span data-i18n="services">Active services</span></div>
+    <div class="stat"><strong id="sessionCount">—</strong><span data-i18n="myNumbers">My numbers</span></div>
+  </div>
+  <section>
+    <div class="section-head"><div><h3 data-i18n="catalogTitle">Explore services</h3><p data-i18n="catalogSub">Only live inventory is shown</p></div></div>
+    <input class="search" id="search" type="search" placeholder="Search services…" aria-label="Search services">
+    <div class="services" id="services"><div class="skeleton"></div><div class="skeleton"></div></div>
+    <div class="select-wrap"><label for="country" data-i18n="countryLabel">Choose a country</label><select id="country" disabled><option data-i18n="chooseService">Choose a service first</option></select></div>
+    <button class="primary" id="getNumber" type="button" disabled data-i18n="getNumber">↗ Get a number</button>
+    <p class="hint" data-i18n="inventoryHint">Inventory depends on the connected provider and numbers approved by the administrator.</p>
+  </section>
+  <section>
+    <div class="section-head"><div><h3 data-i18n="sessionsTitle">My number sessions</h3><p data-i18n="sessionsSub">OTP updates appear here when received</p></div><button class="refresh" id="sessionsRefresh" type="button" data-i18n="refresh">Refresh</button></div>
+    <div class="sessions" id="sessions"><div class="skeleton"></div></div>
+  </section>
+  <footer class="footer" data-i18n="footer">Secure Telegram Mini App · Buy Coin is an in-bot points balance, not cash.</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  const $ = (id) => document.getElementById(id);
+  const translations = {
+    en:{subtitle:"Premium number hub",eyebrow:"YOUR NUMBER WORKSPACE",hello:"Welcome back, ",heroText:"Choose a service, pick a country, and manage your assigned numbers in one place.",wallet:"BUY COIN WALLET",refresh:"↻ Refresh",available:"Numbers available",services:"Active services",myNumbers:"My numbers",catalogTitle:"Explore services",catalogSub:"Only live inventory is shown",search:"Search services…",countryLabel:"Choose a country",chooseService:"Choose a service first",getNumber:"↗ Get a number",inventoryHint:"Inventory depends on the connected provider and numbers approved by the administrator.",sessionsTitle:"My number sessions",sessionsSub:"OTP updates appear here when received",footer:"Secure Telegram Mini App · Buy Coin is an in-bot points balance, not cash.",noServices:"No active services or available stock yet.",noSessions:"Your assigned numbers will appear here.",selectCountry:"Select a country",selectService:"Select a service first",requesting:"Assigning number…",success:"Number assigned successfully.",noOtp:"Waiting for OTP from provider…",number:"Number",otp:"Latest SMS / OTP",service:"Service",country:"Country",copy:"Copy",joinRequired:"Please join the required channel(s) in the bot, then reopen this Mini App.",expired:"Could not verify Telegram session. Close and reopen the Mini App from Telegram.",loading:"Loading your workspace…",error:"Something went wrong. Please try again.",noStock:"No numbers are available for this selection.",emptySearch:"No matching services."},
+    dr:{subtitle:"مرکز شماره‌های پریمیوم",eyebrow:"فضای مدیریت شماره‌های شما",hello:"خوش آمدید، ",heroText:"سرویس را انتخاب کنید، کشور را برگزینید و شماره‌های اختصاص‌یافته را یک‌جا مدیریت کنید.",wallet:"کیف پول بای‌کوین",refresh:"↻ تازه‌سازی",available:"شماره‌های موجود",services:"سرویس‌های فعال",myNumbers:"شماره‌های من",catalogTitle:"انتخاب سرویس",catalogSub:"فقط موجودی واقعی نمایش داده می‌شود",search:"جستجوی سرویس…",countryLabel:"کشور را انتخاب کنید",chooseService:"ابتدا یک سرویس انتخاب کنید",getNumber:"↗ دریافت شماره",inventoryHint:"موجودی به ارائه‌دهندهٔ متصل و شماره‌های تأییدشده توسط مدیر بستگی دارد.",sessionsTitle:"نشست‌های شمارهٔ من",sessionsSub:"کدهای OTP پس از دریافت اینجا نمایش داده می‌شوند",footer:"مینی‌اپ امن تلگرام · بای‌کوین امتیاز داخلی ربات است، پول نقد نیست.",noServices:"فعلاً سرویس فعال یا شمارهٔ موجود نیست.",noSessions:"شماره‌های اختصاص‌یافتهٔ شما اینجا نمایش داده می‌شوند.",selectCountry:"کشور را انتخاب کنید",selectService:"ابتدا سرویس را انتخاب کنید",requesting:"در حال اختصاص شماره…",success:"شماره با موفقیت اختصاص یافت.",noOtp:"در انتظار دریافت OTP از ارائه‌دهنده…",number:"شماره",otp:"آخرین پیامک / OTP",service:"سرویس",country:"کشور",copy:"کاپی",joinRequired:"ابتدا در کانال‌های اجباری از طریق ربات عضو شوید و سپس مینی‌اپ را دوباره باز کنید.",expired:"تأیید نشست تلگرام انجام نشد. مینی‌اپ را از داخل تلگرام دوباره باز کنید.",loading:"در حال بارگذاری فضای شما…",error:"مشکلی رخ داد. لطفاً دوباره تلاش کنید.",noStock:"برای این انتخاب شماره موجود نیست.",emptySearch:"سرویس مطابق جستجو پیدا نشد."}
+  };
+  let lang = (localStorage.getItem("num-lang") || (document.documentElement.lang === "fa" ? "dr" : "en"));
+  let catalogData = {services:[],total_available:0}, selectedService = null, profile = null;
+  const initData = tg ? tg.initData : "";
+  if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0b1020"); tg.setBackgroundColor("#0b1020"); } catch (_) {} }
+  const tr = (key) => (translations[lang] && translations[lang][key]) || translations.en[key] || key;
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  function setLang(next) {
+    lang = next; localStorage.setItem("num-lang", lang);
+    document.documentElement.lang = lang === "dr" ? "fa" : "en";
+    document.documentElement.dir = lang === "dr" ? "rtl" : "ltr";
+    document.querySelectorAll("[data-i18n]").forEach(el => { const key = el.dataset.i18n; if (translations[lang][key]) el.textContent = translations[lang][key]; });
+    $("search").placeholder = tr("search"); $("langBtn").textContent = lang === "dr" ? "English / دری" : "دری / EN";
+    $("firstName").textContent = profile && profile.first_name ? profile.first_name : "";
+    renderServices(); renderSessions();
+  }
+  function toast(message) { const el=$("toast"); el.textContent=message; el.classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove("show"),3600); }
+  async function api(path, options={}) {
+    if (!initData) throw new Error(tr("expired"));
+    const response = await fetch(path, { ...options, headers: { "Content-Type":"application/json", "X-Telegram-Init-Data":initData, ...(options.headers||{}) }});
+    const data = await response.json().catch(()=>({}));
+    if (!response.ok || !data.ok) { const error=new Error(data.error || tr("error")); error.status=response.status; error.data=data; throw error; }
+    return data;
+  }
+  function iconFor(name) {
+    const s=name.toLowerCase();
+    if(s.includes("whatsapp"))return "◉"; if(s.includes("telegram"))return "➤"; if(s.includes("tiktok"))return "♪"; if(s.includes("instagram"))return "◎"; if(s.includes("facebook"))return "f"; if(s.includes("gmail"))return "✉"; if(s.includes("game"))return "⌘"; return "✦";
+  }
+  function renderServices() {
+    const root=$("services"), term=$("search").value.trim().toLowerCase();
+    const list=catalogData.services.filter(s=>s.name.toLowerCase().includes(term));
+    $("availableCount").textContent=String(catalogData.total_available ?? 0);
+    $("serviceCount").textContent=String(catalogData.services.length);
+    if(!list.length){root.innerHTML='<div class="empty" style="grid-column:1/-1"><span>✧</span>'+esc(catalogData.services.length?tr("emptySearch"):tr("noServices"))+'</div>'; selectedService=null; fillCountries(); return;}
+    root.innerHTML=list.map(s=>'<button type="button" class="service '+(selectedService===s.name?'selected':'')+'" data-service="'+esc(s.name)+'"><div class="service-top"><span class="service-icon">'+iconFor(s.name)+'</span><span class="count">'+s.count+' '+(lang==="dr"?"موجود":"available")+'</span></div><strong>'+esc(s.name)+'</strong><small>'+s.countries.length+' '+(lang==="dr"?"کشور":"countries")+'</small></button>').join("");
+    root.querySelectorAll("[data-service]").forEach(btn=>btn.addEventListener("click",()=>{selectedService=btn.dataset.service; renderServices();fillCountries();}));
+    if(selectedService && !catalogData.services.some(s=>s.name===selectedService))selectedService=null;
+    fillCountries();
+  }
+  function fillCountries() {
+    const select=$("country"), button=$("getNumber");
+    const service=catalogData.services.find(s=>s.name===selectedService);
+    if(!service){select.innerHTML='<option value="">'+esc(tr("chooseService"))+'</option>';select.disabled=true;button.disabled=true;return;}
+    select.innerHTML='<option value="">'+esc(tr("selectCountry"))+'</option>'+service.countries.map(c=>'<option value="'+esc(c.country)+'">'+esc(c.country)+' · '+c.count+'</option>').join("");
+    select.disabled=false; button.disabled=!select.value;
+    select.onchange=()=>{button.disabled=!select.value;};
+  }
+  function renderSessions() {
+    const root=$("sessions"); const sessionsData=window.__sessions||[];
+    $("sessionCount").textContent=String(new Set(sessionsData.map(s=>s.id)).size);
+    if(!sessionsData.length){root.innerHTML='<div class="empty"><span>▣</span>'+esc(tr("noSessions"))+'</div>';return;}
+    const unique=[...new Map(sessionsData.map(s=>[s.id,s])).values()];
+    root.innerHTML=unique.map(s=>'<article class="session"><div class="session-head"><div><strong>'+esc(s.service)+' · '+esc(s.country)+'</strong><div class="number">'+esc(s.number)+'</div><div class="meta">'+esc(s.created_at||"")+'</div></div><button class="pill copy-number" data-copy="'+esc(s.number)+'">'+esc(tr("copy"))+'</button></div><div class="otp">'+(s.otp_message?'<b>'+esc(tr("otp"))+'</b>\n'+esc(s.otp_message)+'\n'+esc(s.otp_received_at||""):'<span>'+esc(tr("noOtp"))+'</span>')+'</div></article>').join("");
+    root.querySelectorAll("[data-copy]").forEach(btn=>btn.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(btn.dataset.copy);toast(lang==="dr"?"شماره کاپی شد":"Number copied");}catch(_){toast(btn.dataset.copy);}}));
+  }
+  async function refreshAll() {
+    $("app").classList.add("loading");
+    try {
+      const [m,c,s]=await Promise.all([api("/api/me"),api("/api/catalog"),api("/api/sessions")]);
+      profile=m.user;catalogData=c;window.__sessions=s.sessions;
+      $("balance").textContent=Number(profile.points||0).toLocaleString(lang==="dr"?"fa-AF":"en-US");
+      $("firstName").textContent=profile.first_name ? profile.first_name : "";
+      renderServices();renderSessions();
+    } catch(err) {
+      toast(err.message);
+      if(err.data && err.data.join_required) (err.data.channels||[]).forEach(c=>{if(c.link)window.open(c.link,"_blank");});
+    } finally {$("app").classList.remove("loading");}
+  }
+  $("langBtn").addEventListener("click",()=>setLang(lang==="en"?"dr":"en"));
+  $("refreshBtn").addEventListener("click",refreshAll);$("sessionsRefresh").addEventListener("click",refreshAll);
+  $("search").addEventListener("input",renderServices);
+  $("getNumber").addEventListener("click",async()=>{
+    const service=selectedService,country=$("country").value;if(!service||!country)return;
+    const btn=$("getNumber");btn.disabled=true;btn.textContent=tr("requesting");
+    try {const result=await api("/api/number",{method:"POST",body:JSON.stringify({service,country})});toast(tr("success"));if(tg)tg.HapticFeedback&&tg.HapticFeedback.notificationOccurred("success");await refreshAll();}
+    catch(err){toast(err.message);if(tg&&tg.HapticFeedback)tg.HapticFeedback.notificationOccurred("error");}
+    finally{btn.textContent=tr("getNumber");btn.disabled=!$("country").value;}
+  });
+  setLang(lang);
+  refreshAll();
+  setInterval(()=>{if(document.visibilityState==="visible")refreshAll();},15000);
+})();
+</script>
+</body>
+</html>
