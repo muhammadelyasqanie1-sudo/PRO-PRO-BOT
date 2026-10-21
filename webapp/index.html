@@ -140,6 +140,7 @@ button,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cur
     try {
       const [m,c,s]=await Promise.all([api("/api/me"),api("/api/catalog"),api("/api/sessions")]);
       profile=m.user;catalogData=c;window.__sessions=s.sessions;
+      if(!localStorage.getItem("num-lang") && profile.lang==="dr" && lang!=="dr")setLang("dr");
       $("balance").textContent=Number(profile.points||0).toLocaleString(lang==="dr"?"fa-AF":"en-US");
       $("firstName").textContent=profile.first_name ? profile.first_name : "";
       renderServices();renderSessions();
