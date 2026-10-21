@@ -173,7 +173,7 @@ class Database:
             )
             if ref:
                 await self.conn.execute(
-                    "UPDATE users SET referrals = referrals + 10, points = points + 10 WHERE id = ?", (ref,)
+                    "UPDATE users SET referrals = referrals + 1, points = points + 10 WHERE id = ?", (ref,)
                 )
                 await self.conn.execute(
                     "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,10,'referral',?,?)",
