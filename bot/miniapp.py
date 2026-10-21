@@ -268,8 +268,8 @@ async def admin_add_number(request: web.Request) -> web.Response:
     except (json.JSONDecodeError, AttributeError, TypeError):
         return _json({"ok": False, "error": "Invalid request body."}, 400)
     import re
-    number = re.sub(r"[\\s().-]", "", raw_number)
-    if not service or not country or not re.fullmatch(r"\\+?\\d{7,20}", number):
+    number = re.sub(r"[\s().-]", "", raw_number)
+    if not service or not country or not re.fullmatch(r"\+?\d{7,20}", number):
         return _json({"ok": False, "error": "Enter a service, country and valid international number."}, 400)
     if not await db.add_phone_number(service, country, number):
         return _json({"ok": False, "error": "This number already exists in the inventory."}, 409)
