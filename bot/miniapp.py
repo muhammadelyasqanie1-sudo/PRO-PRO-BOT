@@ -240,7 +240,9 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     await site.start()
     log.info("Mini App web server listening on %s:%s", host, port)
 
-    public_url = os.getenv("MINI_APP_URL", "").strip()
+    public_url = os.getenv("MINI_APP_URL", "").strip() or os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    if public_url and not public_url.startswith(("https://", "http://")):
+        public_url = "https://" + public_url
     if public_url.startswith("https://"):
         try:
             await telegram_app.bot.set_chat_menu_button(
