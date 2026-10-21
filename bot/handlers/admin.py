@@ -20,19 +20,19 @@ log = logging.getLogger(__name__)
 esc = html.escape
 
 PROMPTS = {
-    "user_info": "Send a user's numeric ID or @username.",
-    "ban": "Send the numeric ID or @username of the user to ban.",
-    "unban": "Send the numeric ID or @username of the user to unban.",
+    "user_info": "Send a user's numeric ID or @username. / آی‌دی عددی یا نام کاربری کاربر را بفرستید.",
+    "ban": "Send the numeric ID or @username of the user to ban. / آی‌دی یا نام کاربری کاربر را برای مسدودسازی بفرستید.",
+    "unban": "Send the numeric ID or @username of the user to unban. / آی‌دی یا نام کاربری کاربر را برای رفع مسدودی بفرستید.",
     "ch_add": (
-        "Send the channel as <code>@username</code> or numeric ID.\n"
+        "Send the channel as <code>@username</code> or numeric ID. / نام کاربری یا آی‌دی عددی کانال را بفرستید.\n"
         "For a private channel add an invite link: <code>-1001234567890 | https://t.me/+abc</code>\n\n"
-        "⚠️ The bot must be an <b>administrator</b> of the channel, otherwise membership cannot be checked."
+        "⚠️ The bot must be an <b>administrator</b> of the channel, otherwise membership cannot be checked. / ربات باید مدیر کانال باشد."
     ),
-    "ad_add": "Send the numeric Telegram ID of the new admin.",
-    "support": "Send the support link (https://t.me/...). Send <code>-</code> to remove it.",
-    "official": "Send the official channel link (https://t.me/...). Send <code>-</code> to remove it.",
-    "broadcast": "Send the message to broadcast (text, photo, video, document... anything).",
-    "num_add": "Choose a service to add a number.",
+    "ad_add": "Send the numeric Telegram ID of the new admin. / آی‌دی عددی مدیر جدید را بفرستید.",
+    "support": "Send the support link (https://t.me/...). Send <code>-</code> to remove it. / لینک پشتیبانی را بفرستید؛ برای حذف، <code>-</code> را ارسال کنید.",
+    "official": "Send the official channel link (https://t.me/...). Send <code>-</code> to remove it. / لینک کانال رسمی را بفرستید؛ برای حذف، <code>-</code> را ارسال کنید.",
+    "broadcast": "Send the message to broadcast (text, photo, video, document... anything). / پیام همگانی را بفرستید (متن، عکس، ویدیو یا فایل).",
+    "num_add": "Choose a service to add a number. / برای افزودن شماره، سرویس را انتخاب کنید.",
 }
 CANCEL_HINT = "\n\nSend /cancel to abort."
 
