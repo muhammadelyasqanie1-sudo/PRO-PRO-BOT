@@ -85,10 +85,10 @@ async def main() -> None:
         assert await db.assign_phone_number(stock[0]["id"], 1)
         assert await db.assigned_users_for_number("+12025550123") == [1]
         await db.set_banned(2, False)
-        assert (await db.get_user(1))["points"] == 1
+        assert (await db.get_user(1))["points"] == 10
         assert await db.adjust_points(1, 5, "test_bonus", actor_id=1)
         assert await db.transfer_points(1, 2, 3)
-        assert (await db.get_user(1))["points"] == 3
+        assert (await db.get_user(1))["points"] == 12
         assert (await db.get_user(2))["points"] == 3
         assert not await db.transfer_points(1, 2, 99)
         assert await db.add_api_key("primary", "public-test-key-value")
