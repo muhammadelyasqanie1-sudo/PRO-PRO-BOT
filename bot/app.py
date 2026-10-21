@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram import BotCommand, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonCommands, Update, WebAppInfo
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -21,6 +21,7 @@ from .db import Database
 from .guards import guard
 from .handlers import admin, router, user
 from .otp_api import poll_augestel
+from .miniapp import start_web_server
 
 log = logging.getLogger("bot")
 
@@ -38,9 +39,14 @@ async def _post_init(app: Application) -> None:
     log.info("Started as @%s (db: %s)", me.username, settings.db_path)
     # Poller checks managed API keys from the admin panel and optional env fallback.
     app.create_task(poll_augestel(app), name="augestel-otp-poller")
+    # The Mini App and Telegram bot share the same database and process.
+    app.bot_data["miniapp_runner"] = await start_web_server(app)
 
 
 async def _post_shutdown(app: Application) -> None:
+    runner = app.bot_data.get("miniapp_runner")
+    if runner:
+        await runner.cleanup()
     db: Database | None = app.bot_data.get("db")
     if db:
         await db.close()
@@ -48,6 +54,30 @@ async def _post_shutdown(app: Application) -> None:
 
 async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     log.error("Unhandled error while processing an update", exc_info=context.error)
+
+
+async def open_mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Offer the Mini App button when a public HTTPS URL has been configured."""
+    import os
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+    url = os.getenv("MINI_APP_URL", "").strip()
+    if not url:
+        domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+        if domain:
+            url = domain if domain.startswith("https://") else f"https://{domain}"
+    if not url.startswith("https://"):
+        await update.effective_message.reply_text(
+            "Mini App is not configured yet. Set MINI_APP_URL to this Railway service's public HTTPS URL."
+        )
+        return
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🚀 Open NUM BOT Mini App / باز کردن مینی‌اپ", web_app=WebAppInfo(url=url.rstrip("/") + "/"))
+    ]])
+    await update.effective_message.reply_text(
+        "Open your premium number workspace / فضای مدیریت شماره‌های خود را باز کنید:",
+        reply_markup=keyboard,
+    )
 
 
 def build_application(settings: Settings) -> Application:
@@ -68,6 +98,7 @@ def build_application(settings: Settings) -> Application:
     app.add_handler(CommandHandler("help", user.help_cmd, filters=private))
     app.add_handler(CommandHandler("cancel", user.cancel, filters=private))
     app.add_handler(CommandHandler("admin", admin.open_panel, filters=private))
+    app.add_handler(CommandHandler("app", open_mini_app, filters=private))
 
     app.add_handler(CallbackQueryHandler(user.on_verify, pattern=r"^verify_join$"))
     app.add_handler(CallbackQueryHandler(user.on_set_language, pattern=r"^(setlang|lang):"))
