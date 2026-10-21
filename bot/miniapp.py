@@ -75,6 +75,9 @@ async def _telegram_user(request: web.Request) -> tuple[dict | None, web.Respons
         return None, _json({"ok": False, "error": "This account is restricted."}, 403)
     if await db.get_setting("maintenance") == "1" and auth["user_id"] != settings.owner_id and not await db.is_admin(auth["user_id"]):
         return None, _json({"ok": False, "error": "The service is temporarily under maintenance."}, 503)
+    # Match the bot guard: administrators can still access the Mini App while configuring force-join.
+    if auth["user_id"] == settings.owner_id or await db.is_admin(auth["user_id"]):
+        return {"auth": auth, "row": row, "db": db, "app": app}, None
     # Enforce the same required-channel gate for API calls, not just bot messages.
     try:
         for channel in await db.list_channels():
