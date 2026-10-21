@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import time
 
 from telegram import LinkPreviewOptions, Update
 from telegram.error import TelegramError
@@ -178,8 +179,16 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await msg.reply_text(t(lang, "no_numbers"))
         else:
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            rows = [[InlineKeyboardButton(f"{n['service']} · {n['country']} · {n['number']}", callback_data=f"number:claim:{n['id']}")] for n in numbers]
-            await msg.reply_text("📱 Available numbers / شماره‌های موجود:", reply_markup=InlineKeyboardMarkup(rows))
+            services = list(dict.fromkeys(n["service"] for n in numbers))
+            context.user_data["number_services"] = services
+            rows = [
+                [InlineKeyboardButton(service, callback_data=f"number:service:{i}")]
+                for i, service in enumerate(services)
+            ]
+            await msg.reply_text(
+                t(lang, "choose_number_service"),
+                reply_markup=InlineKeyboardMarkup(rows),
+            )
     elif key == "menu_language":
         await msg.reply_text(t(lang, "choose_lang"), reply_markup=language_keyboard("lang"))
     elif key == "menu_admin":
@@ -190,24 +199,119 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Choose service, choose country, then assign exactly one available number."""
     q = update.callback_query
     await q.answer()
-    try:
-        number_id = int((q.data or "").rsplit(":", 1)[1])
-    except (ValueError, IndexError):
-        return
+    data = (q.data or "").split(":")
     db = get_db(context)
-    item = await db.get_phone_number(number_id)
-    active_services = {s.casefold() for s in await db.list_active_services()}
-    if not item or item["status"] != "available" or item["service"].casefold() not in active_services:
-        await q.message.reply_text("This number or its service is no longer available. / این شماره یا سرویس دیگر موجود نیست.")
-        return
-    if not await db.assign_phone_number(number_id, q.from_user.id):
-        await q.message.reply_text("This number was just taken. Please choose another.")
-        return
     row = await db.get_user(q.from_user.id)
     lang = row.get("lang") if row else None
-    await q.message.reply_text(t(lang, "number_added", service=html.escape(item["service"]), country=html.escape(item["country"]), number=html.escape(item["number"])))
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    if len(data) >= 3 and data[1] == "service":
+        try:
+            index = int(data[2])
+            service = context.user_data["number_services"][index]
+        except (ValueError, IndexError, KeyError):
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        active_services = {s.casefold() for s in await db.list_active_services()}
+        if service.casefold() not in active_services:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        numbers = await db.list_available_numbers(service=service)
+        countries = list(dict.fromkeys(n["country"] for n in numbers))
+        if not countries:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        context.user_data["number_selected_service"] = service
+        context.user_data["number_countries"] = countries
+        rows = [
+            [InlineKeyboardButton(country, callback_data=f"number:country:{i}")]
+            for i, country in enumerate(countries)
+        ]
+        await q.message.reply_text(
+            t(lang, "choose_number_country", service=html.escape(service)),
+            reply_markup=InlineKeyboardMarkup(rows),
+        )
+        return
+
+    if len(data) >= 3 and data[1] == "country":
+        try:
+            index = int(data[2])
+            country = context.user_data["number_countries"][index]
+            service = context.user_data["number_selected_service"]
+        except (ValueError, IndexError, KeyError):
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        if not await db.list_available_numbers(service=service, country=country):
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        context.user_data["number_selected_country"] = country
+        await q.message.reply_text(
+            t(lang, "confirm_get_number", country=html.escape(country)),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(t(lang, "get_number_button"), callback_data="number:get:0")
+            ]]),
+        )
+        return
+
+    if len(data) >= 2 and data[1] == "get":
+        now = time.monotonic()
+        last_request = float(context.user_data.get("last_number_request_at", 0))
+        wait = 5 - (now - last_request)
+        if wait > 0:
+            await q.message.reply_text(t(lang, "number_cooldown", seconds=max(1, int(wait + 0.99))))
+            return
+        service = context.user_data.get("number_selected_service")
+        country = context.user_data.get("number_selected_country")
+        if not service or not country:
+            await q.message.reply_text(t(lang, "choose_number_service"))
+            return
+        active_services = {s.casefold() for s in await db.list_active_services()}
+        if service.casefold() not in active_services:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        numbers = await db.list_available_numbers(service=service, country=country)
+        if not numbers:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        # Try each candidate in case another user claims the first one simultaneously.
+        for item in numbers:
+            if await db.assign_phone_number(int(item["id"]), q.from_user.id):
+                context.user_data["last_number_request_at"] = time.monotonic()
+                await q.message.reply_text(t(
+                    lang, "number_added",
+                    service=html.escape(item["service"]),
+                    country=html.escape(item["country"]),
+                    number=html.escape(item["number"]),
+                ))
+                return
+        await q.message.reply_text(t(lang, "no_numbers"))
+        return
+
+    # Compatibility for older inline buttons sent before this update.
+    if len(data) >= 3 and data[1] == "claim":
+        try:
+            number_id = int(data[2])
+        except ValueError:
+            return
+        item = await db.get_phone_number(number_id)
+        active_services = {s.casefold() for s in await db.list_active_services()}
+        if not item or item["status"] != "available" or item["service"].casefold() not in active_services:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        now = time.monotonic()
+        last_request = float(context.user_data.get("last_number_request_at", 0))
+        wait = 5 - (now - last_request)
+        if wait > 0:
+            await q.message.reply_text(t(lang, "number_cooldown", seconds=max(1, int(wait + 0.99))))
+            return
+        if not await db.assign_phone_number(number_id, q.from_user.id):
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        context.user_data["last_number_request_at"] = time.monotonic()
+        await q.message.reply_text(t(lang, "number_added", service=html.escape(item["service"]), country=html.escape(item["country"]), number=html.escape(item["number"])))
 
  
 async def handle_points_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str) -> None:

@@ -262,7 +262,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data["state"] = "num_add_number"
         service_name = esc(str(selected["service"]))
         country_name = esc(arg)
-        await _edit(q, f"📱 <b>{service_name}</b> · <b>{country_name}</b>\nSend the phone number now.\nIf it does not start with 0, a leading 0 will be added. Numbers starting with + are preserved.\n\nSend /cancel to abort.", back_keyboard())
+        await _edit(q, f"📱 <b>{service_name}</b> · <b>{country_name}</b>\nSend one phone number, paste multiple numbers (one per line), or upload a UTF-8 .txt file with one number per line.\nNumbers starting with + are preserved; local numbers get a leading 0. Duplicates and invalid lines are skipped in bulk imports.\n\nSend /cancel to abort.", back_keyboard())
 
     elif action == "num_stock":
         numbers = await db.list_available_numbers()
@@ -367,8 +367,8 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
         )
         return
 
-    if not text:
-        await msg.reply_text("Please send text.")
+    if not text and not (state == "num_add_number" and msg.document):
+        await msg.reply_text("Please send text, or upload a .txt file when importing numbers.")
         return
 
     done = True
@@ -430,27 +430,91 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
         selected = context.user_data.get("num_add") or {}
         service = selected.get("service")
         country = selected.get("country")
-        number = text.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
         if not service or not country:
             context.user_data.pop("state", None)
             context.user_data.pop("num_add", None)
             await msg.reply_text("Please start adding the number again.", reply_markup=back_keyboard())
             return
-        digits = "".join(ch for ch in number if ch.isdigit())
-        if len(digits) < 7 or len(digits) > 20 or any(ch not in "+0123456789" for ch in number) or number.count("+") > 1 or ("+" in number and not number.startswith("+")):
-            await msg.reply_text("Number looks invalid. Send digits, optionally starting with +. Try again or /cancel.")
+
+        source_text = text
+        uploaded_file = bool(msg.document)
+        if uploaded_file:
+            filename = (msg.document.file_name or "").lower()
+            if not filename.endswith(".txt"):
+                await msg.reply_text("Please upload a plain .txt file with one phone number per line.")
+                return
+            if msg.document.file_size and msg.document.file_size > 1_000_000:
+                await msg.reply_text("The .txt file must be smaller than 1 MB.")
+                return
+            try:
+                telegram_file = await context.bot.get_file(msg.document.file_id)
+                payload = await telegram_file.download_as_bytearray()
+                source_text = bytes(payload).decode("utf-8-sig")
+            except (UnicodeDecodeError, TelegramError, OSError):
+                await msg.reply_text("Could not read that file. Save it as UTF-8 text and try again.")
+                return
+
+        lines = [line.strip() for line in source_text.splitlines() if line.strip() and not line.strip().startswith("#")]
+        if not lines:
+            await msg.reply_text("No phone numbers found. Send one number per line, or upload a non-empty .txt file.")
             return
-        # Store phone numbers as text to preserve leading zeros.
-        # Add a leading zero to local-format numbers only; keep international + numbers unchanged.
-        if not number.startswith("0") and not number.startswith("+"):
-            number = "0" + number
-        ok = await db.add_phone_number(str(service)[:40], str(country)[:60], number[:30])
-        if not ok:
+
+        normalized = []
+        seen_in_batch = set()
+        invalid = 0
+        duplicate_in_batch = 0
+        for line in lines:
+            number = "".join(line.split()).replace("-", "").replace("(", "").replace(")", "").replace(".", "")
+            if (
+                not number
+                or any(ch not in "+0123456789" for ch in number)
+                or number.count("+") > 1
+                or ("+" in number and not number.startswith("+"))
+            ):
+                invalid += 1
+                continue
+            digits = "".join(ch for ch in number if ch in "0123456789")
+            if len(digits) < 7 or len(digits) > 20:
+                invalid += 1
+                continue
+            # Preserve international numbers and keep local numbers as text with a leading zero.
+            if not number.startswith("0") and not number.startswith("+"):
+                number = "0" + number
+            number = number[:30]
+            if number in seen_in_batch:
+                duplicate_in_batch += 1
+                continue
+            seen_in_batch.add(number)
+            normalized.append(number)
+
+        is_bulk = uploaded_file or len(lines) > 1
+        if not is_bulk and invalid:
+            await msg.reply_text("Number looks invalid. Send 7–20 digits, optionally starting with +. Try again or /cancel.")
+            return
+
+        added, duplicate_in_db = await db.add_phone_numbers_bulk(
+            str(service)[:40], str(country)[:60], normalized
+        ) if normalized else (0, 0)
+        duplicates = duplicate_in_batch + duplicate_in_db
+
+        if not is_bulk and added == 0:
             await msg.reply_text("That number already exists. Send another or /cancel.")
             return
-        context.user_data.pop("state", None)
-        context.user_data.pop("num_add", None)
-        await msg.reply_text(f"✅ Number added to stock.\nService: <b>{esc(str(service))}</b>\nCountry: <b>{esc(str(country))}</b>\nNumber: <code>{esc(number)}</code>", reply_markup=back_keyboard())
+
+        if added:
+            context.user_data.pop("state", None)
+            context.user_data.pop("num_add", None)
+
+        await msg.reply_text(
+            "✅ <b>Number import result</b>\n"
+            f"📱 Service: <b>{esc(str(service))}</b>\n"
+            f"🌍 Country: <b>{esc(str(country))}</b>\n"
+            f"➕ Added: <b>{added}</b>\n"
+            f"♻️ Duplicates skipped: <b>{duplicates}</b>\n"
+            f"⚠️ Invalid lines skipped: <b>{invalid}</b>"
+            + ("\n\nSend another number list or /cancel." if not added else ""),
+            reply_markup=back_keyboard() if added else None,
+        )
         return
 
     if state in ("user_info", "ban", "unban"):
