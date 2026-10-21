@@ -118,7 +118,7 @@ async def me(request: web.Request) -> web.Response:
             "lang": row.get("lang") or "en",
             "points": int(row.get("points") or 0),
             "referrals": int(row.get("referrals") or 0),
-            "is_admin": auth["user_id"] == session["app"].bot_data["settings"].owner_id or await session["db"].is_admin(auth["user_id"]),
+            "is_admin": session["auth"]["user_id"] == session["app"].bot_data["settings"].owner_id or await session["db"].is_admin(session["auth"]["user_id"]),
         },
     })
 
