@@ -146,19 +146,19 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             delta = int(item["delta"])
             reason = item["reason"]
             if reason == "referral":
-                label = "Referral bonus / پاداش دعوت"
+                label = "Buy Coin referral / پاداش دعوت بای‌کوین"
             elif reason.startswith("transfer_to:"):
                 label = f"Sent to {reason.split(':', 1)[1]} / ارسال به کاربر"
             elif reason.startswith("transfer_from:"):
                 label = f"Received from {reason.split(':', 1)[1]} / دریافت از کاربر"
             elif reason == "initial_owner_bonus":
-                label = "Initial bonus / امتیاز اولیه"
+                label = "Initial Buy Coin / بای‌کوین اولیه"
             elif reason == "admin_adjustment":
-                label = "Admin adjustment / تغییر مدیر"
+                label = "Buy Coin adjustment / تغییر بای‌کوین"
             else:
                 label = reason
             lines.append(f"• {'+' if delta > 0 else ''}{delta} — {html.escape(label)}")
-        history_text = "\n".join(lines) if lines else "No transactions yet / هنوز تراکنشی نیست."
+        history_text = "\n".join(lines) if lines else "No Buy Coin transactions yet / هنوز تراکنش بای‌کوین ندارید."
         await msg.reply_text(
             t(lang, "points", points=row.get("points", 0)) +
             "\n\n📜 Recent history / تاریخچهٔ اخیر:\n" + history_text
@@ -166,9 +166,9 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     elif key == "menu_daily_points":
         claimed, balance = await db.claim_daily_points(user.id, 15)
         if claimed:
-            await msg.reply_text(f"🎉 +15 daily points! Balance: {balance} / پاداش روزانه: ۱۵ امتیاز دریافت شد")
+            await msg.reply_text(f"🎉 +15 Buy Coin! Balance: {balance} / ۱۵ بای‌کوین روزانه دریافت شد")
         else:
-            await msg.reply_text(f"⏳ Daily reward already claimed. Balance: {balance} / پاداش امروز را قبلاً گرفته‌اید")
+            await msg.reply_text(f"⏳ Daily Buy Coin already claimed. Balance: {balance} / بای‌کوین امروز را قبلاً گرفته‌اید")
     elif key == "menu_send_points":
         context.user_data["state"] = "points_transfer_target"
         await msg.reply_text(t(lang, "send_points_prompt"))
@@ -325,11 +325,11 @@ async def handle_points_state(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if state == "points_transfer_target":
         if not value.isdigit():
-            await msg.reply_text("Please send the recipient's numeric Telegram ID, or /cancel.")
+            await msg.reply_text("Send the Telegram ID of a user registered in this bot, or /cancel. / آی‌دی کاربری را بفرستید که همین ربات را شروع کرده باشد.")
             return
         recipient_id = int(value)
         if recipient_id == user.id:
-            await msg.reply_text("You cannot send points to yourself. Send another ID or /cancel.")
+            await msg.reply_text("You cannot transfer Buy Coin to yourself. / نمی‌توانید بای‌کوین را به خودتان انتقال دهید؛ آی‌دی دیگری بفرستید یا /cancel.")
             return
         recipient = await db.get_user(recipient_id)
         if not recipient or recipient.get("is_banned"):
@@ -342,7 +342,7 @@ async def handle_points_state(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if state == "points_transfer_amount":
         if not value.isdigit() or int(value) <= 0 or int(value) > 1_000_000_000:
-            await msg.reply_text("Please send a whole number between 1 and 1,000,000,000 points, or /cancel.")
+            await msg.reply_text("Send a whole Buy Coin amount between 1 and 1,000,000,000, or /cancel. / مقدار صحیح بای‌کوین را بفرستید.")
             return
         recipient_id = context.user_data.get("points_recipient_id")
         context.user_data.pop("state", None)
