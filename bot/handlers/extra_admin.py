@@ -15,7 +15,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, action
     q = update.callback_query
     uid = q.from_user.id
     if not is_owner(context, uid):
-        await q.edit_message_text("Only the bot owner can manage API keys and points.", reply_markup=back_keyboard())
+        await q.edit_message_text("Only the bot owner can manage API keys and Buy Coin. / فقط مالک می‌تواند کلیدهای API و بای‌کوین را مدیریت کند.", reply_markup=back_keyboard())
         return
     db = get_db(context)
 
@@ -61,20 +61,20 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, action
         owner = await db.get_user(get_settings(context).owner_id)
         balance = owner.get("points", 0) if owner else 0
         rows = [
-            [InlineKeyboardButton("➕ Give points", callback_data="adm:points_add")],
-            [InlineKeyboardButton("➖ Remove points", callback_data="adm:points_sub")],
+            [InlineKeyboardButton("➕ Add Buy Coin", callback_data="adm:points_add")],
+            [InlineKeyboardButton("➖ Remove Buy Coin", callback_data="adm:points_sub")],
             [InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")],
         ]
         await q.edit_message_text(
-            f"⭐ <b>Points management</b>\n\n👑 Owner balance: <b>{balance}</b>\n"
-            "🎁 Referral reward: <b>10 points per valid invite</b>",
+            f"⭐ <b>Buy Coin management / مدیریت بای‌کوین</b>\n\n👑 Owner balance: <b>{balance}</b>\n"
+            "🎁 Referral reward: <b>10 Buy Coin per valid invite</b>",
             reply_markup=InlineKeyboardMarkup(rows),
         )
     elif action in ("points_add", "points_sub"):
         context.user_data["state"] = action
         verb = "add" if action == "points_add" else "remove"
         await q.edit_message_text(
-            f"Send <code>USER_ID | AMOUNT</code> to {verb} points.\n\nSend /cancel to abort.",
+            f"Send <code>USER_ID | AMOUNT</code> to {verb} Buy Coin.\n\nSend /cancel to abort.",
             reply_markup=back_keyboard(),
         )
 
@@ -138,7 +138,7 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
             target_text, amount_text = parts
         target_text, amount_text = target_text.strip(), amount_text.strip()
         if not target_text.isdigit() or not amount_text.isdigit() or int(amount_text) <= 0:
-            await msg.reply_text("User ID and positive amount are required. Try again or /cancel.")
+            await msg.reply_text("User ID and positive Buy Coin amount are required. Try again or /cancel.")
             return
         target_id, amount = int(target_text), int(amount_text)
         if not await db.get_user(target_id):
@@ -146,11 +146,11 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
             return
         delta = amount if state == "points_add" else -amount
         if not await db.adjust_points(target_id, delta, "admin_adjustment", actor_id=uid):
-            await msg.reply_text("Could not apply the change. The user may not have enough points.")
+            await msg.reply_text("Could not apply the change. The user may not have enough Buy Coin.")
             return
         context.user_data.pop("state", None)
         current = await db.get_user(target_id)
         await msg.reply_text(
-            f"✅ Points updated for <code>{target_id}</code>. New balance: <b>{current['points']}</b>.",
+            f"✅ Buy Coin updated for <code>{target_id}</code>. New balance: <b>{current['points']}</b>.",
             reply_markup=back_keyboard(),
         )
