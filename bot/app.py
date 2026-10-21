@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonCommands, Update, WebAppInfo
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -33,7 +33,7 @@ async def _post_init(app: Application) -> None:
     app.bot_data["db"] = db
     await db.ensure_owner_points(settings.owner_id, 10000)
     await app.bot.set_my_commands(
-        [BotCommand("start", "Start / menu"), BotCommand("help", "Help"), BotCommand("cancel", "Cancel current action")]
+        [BotCommand("start", "Start / menu"), BotCommand("app", "Open Mini App"), BotCommand("help", "Help"), BotCommand("cancel", "Cancel current action")]
     )
     me = await app.bot.get_me()
     log.info("Started as @%s (db: %s)", me.username, settings.db_path)
