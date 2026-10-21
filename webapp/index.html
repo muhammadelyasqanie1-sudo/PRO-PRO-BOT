@@ -78,7 +78,8 @@ button,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cur
     lang = next; localStorage.setItem("num-lang", lang);
     document.documentElement.lang = lang === "dr" ? "fa" : "en";
     document.documentElement.dir = lang === "dr" ? "rtl" : "ltr";
-    document.querySelectorAll("[data-i18n]").forEach(el => { const key = el.dataset.i18n; if (translations[lang][key]) el.textContent = translations[lang][key]; });\n    document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{const key=el.dataset.i18nPlaceholder;if(translations[lang][key])el.placeholder=translations[lang][key];});
+    document.querySelectorAll("[data-i18n]").forEach(el => { const key = el.dataset.i18n; if (translations[lang][key]) el.textContent = translations[lang][key]; });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{const key=el.dataset.i18nPlaceholder;if(translations[lang][key])el.placeholder=translations[lang][key];});
     $("search").placeholder = tr("search"); $("langBtn").textContent = lang === "dr" ? "English / دری" : "دری / EN";
     $("firstName").textContent = profile && profile.first_name ? profile.first_name : "";
     renderServices(); renderSessions(); renderAdmin();
@@ -152,7 +153,12 @@ button,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cur
   $("langBtn").addEventListener("click",()=>setLang(lang==="en"?"dr":"en"));
   $("refreshBtn").addEventListener("click",refreshAll);$("sessionsRefresh").addEventListener("click",refreshAll);$("adminRefresh").addEventListener("click",async()=>{try{adminData=await api("/api/admin/overview");renderAdmin();}catch(err){toast(err.message);}});
   $("search").addEventListener("input",renderServices);
-  $("adminAddNumber").addEventListener("click",async()=>{\n    const service=$("adminService").value.trim(),country=$("adminCountry").value.trim(),number=$("adminNumber").value.trim();\n    const btn=$("adminAddNumber");if(!service||!country||!number){toast(lang==="dr"?"تمام خانه‌ها را تکمیل کنید":"Complete all fields first");return;}\n    btn.disabled=true;try{await api("/api/admin/number",{method:"POST",body:JSON.stringify({service,country,number,activate:$("adminActivate").checked})});$("adminNumber").value="";toast(tr("saved"));adminData=await api("/api/admin/overview");await refreshAll();}catch(err){toast(err.message);}finally{btn.disabled=false;}\n  });\n  $("getNumber").addEventListener("click",async()=>{
+  $("adminAddNumber").addEventListener("click",async()=>{
+    const service=$("adminService").value.trim(),country=$("adminCountry").value.trim(),number=$("adminNumber").value.trim();
+    const btn=$("adminAddNumber");if(!service||!country||!number){toast(lang==="dr"?"تمام خانه‌ها را تکمیل کنید":"Complete all fields first");return;}
+    btn.disabled=true;try{await api("/api/admin/number",{method:"POST",body:JSON.stringify({service,country,number,activate:$("adminActivate").checked})});$("adminNumber").value="";toast(tr("saved"));adminData=await api("/api/admin/overview");await refreshAll();}catch(err){toast(err.message);}finally{btn.disabled=false;}
+  });
+  $("getNumber").addEventListener("click",async()=>{
     const service=selectedService,country=$("country").value;if(!service||!country)return;
     const btn=$("getNumber");btn.disabled=true;btn.textContent=tr("requesting");
     try {const result=await api("/api/number",{method:"POST",body:JSON.stringify({service,country})});toast(tr("success"));if(tg)tg.HapticFeedback&&tg.HapticFeedback.notificationOccurred("success");await refreshAll();}
