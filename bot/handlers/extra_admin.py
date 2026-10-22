@@ -131,7 +131,6 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
             result = await sync_augestel_numbers(db)
         except Exception as exc:
             # The key stays saved even if the provider is temporarily unavailable.
-            from .. import otp_api
             import logging
             logging.getLogger(__name__).warning("Initial provider inventory sync failed (%s).", type(exc).__name__)
             await msg.reply_text(
