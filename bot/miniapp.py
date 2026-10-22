@@ -329,11 +329,12 @@ async def admin_add_number(request: web.Request) -> web.Response:
         return _json({"ok": False, "error": "Invalid request body."}, 400)
     import re
     number = re.sub(r"[\s().-]", "", raw_number)
-    known_services = await db.list_phone_number_services()
-    service = next((name for name in known_services if name.casefold() == service.casefold()), service)
-    if not service or not country or not re.fullmatch(r"\+?\d{7,20}", number):
+    known_services = list(dict.fromkeys([v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()] + await db.list_phone_number_services()))
+    canonical = next((name for name in known_services if name.casefold() == service.casefold()), None)
+    if not canonical or not country or not re.fullmatch(r"\+?\d{7,20}", number):
         return _json({"ok": False, "error": "Enter a service, country and valid international number."}, 400)
-    service = canonical\n    if not await db.add_phone_number(service, country, number):
+    service = canonical\n    service = canonical
+    if not await db.add_phone_number(service, country, number):
         return _json({"ok": False, "error": "This number already exists in the inventory."}, 409)
     if activate:
         active = {name.casefold() for name in await db.list_active_services()}
@@ -513,7 +514,8 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server.router.add_get("/api/admin/overview", admin_overview)
     server.router.add_post("/api/admin/provider-sync", admin_provider_sync)
     server.router.add_post("/api/admin/number", admin_add_number)
-    server.router.add_post("/api/admin/service", admin_toggle_service)\n    server.router.add_post("/api/admin/services", admin_create_service)
+    server.router.add_post("/api/admin/service", admin_toggle_service)
+    server.router.add_post("/api/admin/services", admin_create_service)
     runner = web.AppRunner(server, access_log=None)
     await runner.setup()
     host = os.getenv("WEB_HOST", "0.0.0.0")
