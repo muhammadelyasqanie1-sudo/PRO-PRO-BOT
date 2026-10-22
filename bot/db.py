@@ -319,7 +319,7 @@ class Database:
         if services is not None:
             if not services:
                 return []
-            sql += " AND (service='Any Service' OR service IN (" + ",".join("?" for _ in services) + "))"
+            sql += " AND service IN (" + ",".join("?" for _ in services) + ")"
             params.extend(services)
         elif service:
             # Inventory belongs to exactly one admin-approved service. Never let a
