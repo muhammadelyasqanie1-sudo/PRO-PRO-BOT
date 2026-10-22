@@ -322,7 +322,9 @@ class Database:
             sql += " AND (service='Any Service' OR service IN (" + ",".join("?" for _ in services) + "))"
             params.extend(services)
         elif service:
-            sql += " AND (service=? OR service='Any Service')"
+            # Inventory belongs to exactly one admin-approved service. Never let a
+            # shared "Any Service" bucket inflate stock for every app.
+            sql += " AND service=?"
             params.append(service)
         if country:
             sql += " AND country=?"
