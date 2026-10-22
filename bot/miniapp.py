@@ -305,7 +305,7 @@ async def admin_overview(request: web.Request) -> web.Response:
             "pending_provider_numbers": int((pending or {}).get("count") or 0),
         },
         "active_services": await db.list_active_services(),
-        "services": await db.list_phone_number_services(),
+        "services": list(dict.fromkeys([v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()] + await db.list_phone_number_services())),
         "inventory": inventory,
     })
 
@@ -366,10 +366,8 @@ async def admin_create_service(request: web.Request) -> web.Response:
         return _json({"ok": False, "error": "That service already exists."}, 409)
     custom.append(service)
     await db.set_setting("custom_services", "\n".join(custom))
-    active = {v.casefold() for v in await db.list_active_services()}
-    if service.casefold() not in active:
-        await db.toggle_service_active(service)
-    return _json({"ok": True, "service": service, "active": True}, 201)
+    # New services stay disabled until an administrator explicitly enables them.
+    return _json({"ok": True, "service": service, "active": False}, 201)
 
 
 async def admin_toggle_service(request: web.Request) -> web.Response:
