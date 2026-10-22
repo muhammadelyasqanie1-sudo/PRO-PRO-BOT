@@ -67,6 +67,12 @@ body{background:radial-gradient(ellipse at 12% -8%,#49318a55 0,transparent 36%),
     <div class="admin-stats" id="adminStats"></div>
     <button class="primary" id="providerSync" type="button" data-i18n="providerSync">↻ Sync countries and numbers from API</button>
     <p class="hint" data-i18n="providerSyncHint">Uses the active provider API key. Newly imported numbers become shared inventory.</p>
+    <h3 style="margin-top:18px">🧩 Create service / ساخت سرویس</h3>
+    <p>Create a service first, then assign numbers to it. / اول سرویس بسازید، بعد شماره‌ها را به آن اختصاص دهید.</p>
+    <div class="admin-form">
+      <input id="adminNewService" maxlength="40" autocomplete="off" placeholder="New service name / نام سرویس جدید">
+      <button class="primary" id="adminCreateService" type="button">＋ Create service / ساخت سرویس</button>
+    </div>
     <h3 data-i18n="addStockTitle">Add inventory number</h3>
     <p data-i18n="addStockSub">The number will be added to the shared bot inventory.</p>
     <div class="admin-form">
@@ -186,6 +192,17 @@ body{background:radial-gradient(ellipse at 12% -8%,#49318a55 0,transparent 36%),
       await refreshAll();
     } catch(err) { toast(err.message); }
     finally { btn.disabled=false; }
+  });
+  $("adminCreateService").addEventListener("click",async()=>{
+    const input=$("adminNewService"),service=input.value.trim(),btn=$("adminCreateService");
+    if(!service){toast(lang==="dr"?"نام سرویس را وارد کنید":"Enter a service name");return;}
+    btn.disabled=true;
+    try{
+      await api("/api/admin/services",{method:"POST",body:JSON.stringify({service})});
+      input.value="";toast(lang==="dr"?"سرویس ساخته شد":"Service created");
+      adminData=await api("/api/admin/overview");await refreshAll();
+    }catch(err){toast(err.message);}
+    finally{btn.disabled=false;}
   });
   $("adminAddNumber").addEventListener("click",async()=>{
     const service=$("adminService").value.trim(),country=$("adminCountry").value.trim(),number=$("adminNumber").value.trim();
