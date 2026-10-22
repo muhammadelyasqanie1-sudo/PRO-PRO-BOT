@@ -143,6 +143,17 @@ async def sync_augestel_numbers(db):
             break
         page += 1
 
+    # If the owner has not configured service visibility yet, enable the
+    # standard bot catalog so provider stock can be offered under every service.
+    active_services = await db.list_active_services()
+    if not active_services:
+        defaults = [
+            "WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook",
+            "Gmail", "Gaming", "Other Services",
+        ]
+        custom = [v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()]
+        await db.set_setting("active_services", "\n".join(dict.fromkeys(defaults + custom)))
+
     return {
         "pages_read": pages_read,
         "received": received,
