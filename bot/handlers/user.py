@@ -391,9 +391,9 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 buttons.insert(1, [InlineKeyboardButton("📢 OTP Channel / کانال کدها", url=otp_link)])
             markup = InlineKeyboardMarkup(buttons)
             if len(assigned) == 1:
-                await q.message.reply_text("\\n\\n".join(blocks) + "\\n\\n⚠️ Only one number is available in this selection right now.", reply_markup=markup)
+                await q.message.reply_text("\n\n".join(blocks) + "\n\n⚠️ Only one number is available in this selection right now.", reply_markup=markup)
             else:
-                await q.message.reply_text("\\n\\n".join(blocks), reply_markup=markup)
+                await q.message.reply_text("\n\n".join(blocks), reply_markup=markup)
             return
         await q.message.reply_text(t(lang, "no_numbers"))
         return
