@@ -418,10 +418,10 @@ class Database:
         return [int(r['assigned_user_id']) for r in rows]
  
     # ---------- points / referrals ----------
-    async def ensure_owner_points(self, owner_id: int, initial_points: int = 10000) -> None:
-        """Grant the initial owner balance exactly once across restarts."""
+    async def ensure_owner_points(self, owner_id: int, initial_points: int = 100000) -> None:
+        """Grant the owner a one-time top-up to the configured minimum balance."""
         assert self.conn is not None
-        marker = await self.get_setting("owner_initial_points_granted_v2")
+        marker = await self.get_setting("owner_initial_points_granted_v3")
         if marker == "1":
             return
         now = _now()
@@ -436,11 +436,11 @@ class Database:
                 "UPDATE users SET points = points + ? WHERE id = ?", (bonus, owner_id)
             )
             await self.conn.execute(
-                "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,'initial_owner_bonus',?,?)",
+                "INSERT INTO points_ledger(user_id,delta,reason,actor_id,created_at) VALUES(?,?,'owner_100000_bonus',?,?)",
                 (owner_id, bonus, owner_id, now),
             )
         await self.conn.execute(
-            "INSERT INTO settings(key,value) VALUES('owner_initial_points_granted_v2','1') "
+            "INSERT INTO settings(key,value) VALUES('owner_initial_points_granted_v3','1') "
             "ON CONFLICT(key) DO UPDATE SET value='1'"
         )
         await self.conn.commit()
