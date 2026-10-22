@@ -220,14 +220,14 @@ def _number_choice_keyboard(items: list[str], prefix: str, page: int = 0, page_s
 
 
 async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Choose service, choose country, then assign exactly one available number."""
+    """Choose service/country and assign up to two distinct available numbers."""
     q = update.callback_query
     await q.answer()
     data = (q.data or "").split(":")
     db = get_db(context)
     row = await db.get_user(q.from_user.id)
     lang = row.get("lang") if row else None
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 
     if len(data) >= 3 and data[1] == "back" and data[2] == "services":
         services = await db.list_active_services()
@@ -385,7 +385,14 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         country=html.escape(item["country"]),
                         number=html.escape(item["number"]))
                 )
-            buttons = [[InlineKeyboardButton("🔄 Get another pair / شماره‌های جدید", callback_data="number:get:0")], [InlineKeyboardButton("⬅️ Back to services / برگشت به سرویس‌ها", callback_data="number:back:services")]]
+            buttons = [
+                [InlineKeyboardButton(f"📋 Copy number {index} / کاپی شماره {index}", copy_text=CopyTextButton(text=item["number"]))]
+                for index, item in enumerate(assigned, 1)
+            ]
+            buttons.extend([
+                [InlineKeyboardButton("🔄 Get another pair / شماره‌های جدید", callback_data="number:get:0")],
+                [InlineKeyboardButton("⬅️ Back to services / برگشت به سرویس‌ها", callback_data="number:back:services")],
+            ])
             otp_link = (await db.get_setting("otp_channel_link")).strip()
             if otp_link.startswith("https://t.me/"):
                 buttons.insert(1, [InlineKeyboardButton("📢 OTP Channel / کانال کدها", url=otp_link)])
