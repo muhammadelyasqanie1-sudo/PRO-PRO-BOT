@@ -69,10 +69,9 @@ def _fetch(base, key):
 async def sync_augestel_numbers(db):
     """Read all paginated provider inventory pages and publish numbers to user stock.
 
-    Provider inventory is stored under the special service 'Any Service'. The
-    user flow can then offer each active bot service while a number is assigned
-    atomically to only one user. This is suitable only when the provider confirms
-    these numbers can receive the SMS/OTP services offered by the bot.
+    Service metadata returned by the provider is preserved. If the provider
+    returns no service metadata, numbers are placed under 'Other Services' so
+    they are not falsely counted as available for every service.
     """
     base = os.getenv("AUGESTEL_API_BASE", "https://augestel.com/api/v1/iprn").strip()
     keys = await db.list_active_api_keys()
@@ -115,15 +114,20 @@ async def sync_augestel_numbers(db):
             if not number:
                 continue
             country = _field(record, "country_name", "country", "country_code", "iso2", "range_name", "range") or "Unknown"
-            normalized.append({"number": number, "country": country})
+            # Preserve provider service metadata where available. Generic numbers
+            # go into one explicit category, not every service's stock.
+            service = _field(record, "service_name", "service", "app", "product", "platform") or "Other Services"
+            active_names = await db.list_active_services()
+            canonical_service = next((name for name in active_names if name.casefold() == service.casefold()), service)
+            normalized.append({"number": number, "country": country, "service": canonical_service[:40]})
         received += len(normalized)
 
-        # Group by country so the country selector reflects provider inventory.
+        # Group by service and country so stock remains independent per service.
         groups = {}
         for item in normalized:
-            groups.setdefault(item["country"], []).append(item["number"])
-        for country, numbers in groups.items():
-            added_count, duplicate_count = await db.add_phone_numbers_bulk("Any Service", country, numbers)
+            groups.setdefault((item["service"], item["country"]), []).append(item["number"])
+        for (service, country), numbers in groups.items():
+            added_count, duplicate_count = await db.add_phone_numbers_bulk(service, country, numbers)
             added += added_count
             duplicates += duplicate_count
 
