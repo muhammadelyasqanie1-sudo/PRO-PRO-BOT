@@ -187,7 +187,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _edit(q, "🧩 <b>Service visibility</b>\nOnly services marked 🟢 are shown to users. Tap a service to activate/deactivate it.", InlineKeyboardMarkup(rows))
 
     elif action == "service_toggle":
-        candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
+        candidates = list(dict.fromkeys([v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
         if not arg.isdigit() or int(arg) >= len(candidates):
             await _edit(q, "Service list changed. Reopen Services and try again.", back_keyboard())
             return
