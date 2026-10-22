@@ -146,32 +146,25 @@ async def catalog(request: web.Request) -> web.Response:
     if not active_services:
         return _json({"ok": True, "services": [], "total_available": 0})
     placeholders = ",".join("?" for _ in active_services)
-    # Provider inventory is stored as "Any Service" after API sync.
-    # Show that stock under every enabled service, as the bot does.
+    # Counts are service-specific. Never add a shared generic pool to every app.
     rows = await db._all(
         f"SELECT service, country, COUNT(*) AS count FROM phone_numbers "
-        f"WHERE status='available' AND (service IN ({placeholders}) OR service='Any Service') "
+        f"WHERE status='available' AND service IN ({placeholders}) "
         "GROUP BY service, country ORDER BY service COLLATE NOCASE, country COLLATE NOCASE",
         tuple(active_services),
     )
-    direct: dict[str, dict[str, int]] = {}
-    provider: dict[str, int] = {}
+    counts: dict[str, dict[str, int]] = {}
     total_available = 0
     for item in rows:
         service_name = str(item["service"])
         country_name = str(item["country"])
         count = int(item["count"])
         total_available += count
-        if service_name.casefold() == "any service":
-            provider[country_name] = provider.get(country_name, 0) + count
-        else:
-            direct.setdefault(service_name.casefold(), {})[country_name] = count
+        counts.setdefault(service_name.casefold(), {})[country_name] = count
 
     services = []
     for name in active_services:
-        country_counts = dict(provider)
-        for country_name, count in direct.get(name.casefold(), {}).items():
-            country_counts[country_name] = country_counts.get(country_name, 0) + count
+        country_counts = counts.get(name.casefold(), {})
         countries = [
             {"country": country_name, "count": count}
             for country_name, count in sorted(country_counts.items(), key=lambda pair: pair[0].casefold())
