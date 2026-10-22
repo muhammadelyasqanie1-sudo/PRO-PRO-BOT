@@ -314,13 +314,16 @@ class Database:
         if services is not None:
             if not services:
                 return []
-            sql += " AND service IN (" + ",".join("?" for _ in services) + ")"
+            sql += " AND (service='Any Service' OR service IN (" + ",".join("?" for _ in services) + "))"
             params.extend(services)
         elif service:
-            sql += " AND service=?"; params.append(service)
+            sql += " AND (service=? OR service='Any Service')"
+            params.append(service)
         if country:
-            sql += " AND country=?"; params.append(country)
-        sql += " ORDER BY id DESC LIMIT 50"
+            sql += " AND country=?"
+            params.append(country)
+        # Return all inventory pages to callers; Telegram menus paginate separately.
+        sql += " ORDER BY id DESC"
         return await self._all(sql, tuple(params))
 
     async def add_pending_provider_numbers(self, records: list[dict[str, str]]) -> tuple[int, int]:
