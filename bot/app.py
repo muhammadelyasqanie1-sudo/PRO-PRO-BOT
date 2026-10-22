@@ -31,7 +31,7 @@ async def _post_init(app: Application) -> None:
     db = Database(settings.db_path)
     await db.connect()
     app.bot_data["db"] = db
-    await db.ensure_owner_points(settings.owner_id, 10000)
+    await db.ensure_owner_points(settings.owner_id, 100000)
     await app.bot.set_my_commands(
         [BotCommand("start", "Start / menu"), BotCommand("app", "Open Mini App"), BotCommand("help", "Help"), BotCommand("cancel", "Cancel current action")]
     )
