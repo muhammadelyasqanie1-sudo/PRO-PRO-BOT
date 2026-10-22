@@ -118,7 +118,13 @@ async def sync_augestel_numbers(db):
             # go into one explicit category, not every service's stock.
             service = _field(record, "service_name", "service", "app", "product", "platform") or "Other Services"
             active_names = await db.list_active_services()
-            canonical_service = next((name for name in active_names if name.casefold() == service.casefold()), service)
+            defaults = [
+                "WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook",
+                "Gmail", "Gaming", "Other Services",
+            ]
+            custom_names = [v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()]
+            known_names = list(dict.fromkeys(active_names + defaults + custom_names))
+            canonical_service = next((name for name in known_names if name.casefold() == service.casefold()), service)
             normalized.append({"number": number, "country": country, "service": canonical_service[:40]})
         received += len(normalized)
 
