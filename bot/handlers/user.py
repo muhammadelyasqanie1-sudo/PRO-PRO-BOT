@@ -287,7 +287,7 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 context.user_data["last_number_request_at"] = time.monotonic()
                 await q.message.reply_text(t(
                     lang, "number_added",
-                    service=html.escape(item["service"]),
+                    service=html.escape(service),
                     country=html.escape(item["country"]),
                     number=html.escape(item["number"]),
                 ))
