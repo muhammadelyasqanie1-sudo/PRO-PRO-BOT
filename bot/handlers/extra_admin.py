@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 
 from ..utils import get_db, get_settings, is_owner
 from ..keyboards import back_keyboard
+from ..otp_api import sync_augestel_numbers
 
 esc = html.escape
 
@@ -125,7 +126,27 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
             await msg.reply_text("That API key is already saved. Send a different key or /cancel.")
             return
         context.user_data.pop("state", None)
-        await msg.reply_text("✅ API key saved and activated. The full key will not be displayed.", reply_markup=back_keyboard())
+        await msg.reply_text("✅ API key saved and activated. Reading provider inventory pages now; this can take a little while…")
+        try:
+            result = await sync_augestel_numbers(db)
+            await msg.reply_text(
+                "✅ <b>API connected and inventory imported</b>\n"
+                f"📄 Pages read: <b>{result['pages_read']}</b>\n"
+                f"📱 New numbers available: <b>{result['added']}</b>\n"
+                f"♻️ Duplicates skipped: <b>{result['duplicates']}</b>\n"
+                f"📦 Records read: <b>{result['received']}</b>\n\n"
+                "Numbers are now available to users under the active services."
+            , reply_markup=back_keyboard())
+        except Exception as exc:
+            # Keep the key saved, but never expose credentials or provider response bodies.
+            import logging
+            logging.getLogger(__name__).warning("Initial provider inventory sync failed (%s).", type(exc).__name__)
+            await msg.reply_text(
+                "✅ API key saved, but automatic inventory reading failed. "
+                "Check that this is a supported Augestel API key and that the provider API is available. "
+                "You can retry from Admin panel → Provider review → Sync.",
+                reply_markup=back_keyboard(),
+            )
         return
 
     if state in ("points_add", "points_sub"):
