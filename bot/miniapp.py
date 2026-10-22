@@ -421,7 +421,7 @@ async def augestel_webhook(request: web.Request) -> web.Response:
 
     if assigned:
         import re
-        match = re.search(r"(?<!\\d)(\\d{3}-\\d{3}|\\d{4,8})(?!\\d)", message)
+        match = re.search(r"(?<!\d)(\d{3}-\d{3}|\d{4,8})(?!\d)", message)
         code = match.group(1) if match else "not detected"
         country = str(data.get("country") or data.get("country_name") or "N/A")
         values = {
@@ -435,7 +435,7 @@ async def augestel_webhook(request: web.Request) -> web.Response:
         }
         template = await db.get_setting(
             "otp_template",
-            "🔐 <b>NUM BOT</b>\\n📱 {service}\\n🌍 {country}\\n📞 <code>{number}</code>\\n🔢 Code: <code>{code}</code>\\n🕒 {time}\\n🗣 {language}\\n<pre>{message}</pre>",
+            "🔐 <b>NUM BOT</b>\n📱 {service}\n🌍 {country}\n📞 <code>{number}</code>\n🔢 Code: <code>{code}</code>\n🕒 {time}\n🗣 {language}\n<pre>{message}</pre>",
         )
         import html
         text_message = template
