@@ -67,16 +67,19 @@ def _fetch(base, key):
     return response.json()
 
 async def sync_augestel_numbers(db):
-    """Fetch one Augestel inventory page into the admin-review queue.
+    """Read all paginated provider inventory pages and publish numbers to user stock.
 
-    Exactly one provider request is made per admin action to respect the API
-    rate limit. New numbers are not made available to users until approved.
+    Provider inventory is stored under the special service 'Any Service'. The
+    user flow can then offer each active bot service while a number is assigned
+    atomically to only one user. This is suitable only when the provider confirms
+    these numbers can receive the SMS/OTP services offered by the bot.
     """
     base = os.getenv("AUGESTEL_API_BASE", "https://augestel.com/api/v1/iprn").strip()
     keys = await db.list_active_api_keys()
     key = keys[0]["api_key"] if keys else os.getenv("AUGESTEL_API_KEY", "").strip()
     if not key:
         raise RuntimeError("No active Augestel API key is configured.")
+
     now = datetime.now(timezone.utc)
     last_sync = await db.get_setting("augestel_inventory_last_sync", "")
     if last_sync:
@@ -86,44 +89,67 @@ async def sync_augestel_numbers(db):
                 raise RuntimeError("Please wait at least 30 seconds between inventory sync requests.")
         except ValueError:
             pass
-    try:
-        page = max(1, int(await db.get_setting("augestel_numbers_page", "1")))
-    except ValueError:
-        page = 1
-
-    # Record the request time before the network call to prevent simultaneous
-    # admins from issuing multiple requests against the provider rate limit.
     await db.set_setting("augestel_inventory_last_sync", now.isoformat(timespec="seconds"))
 
-    def fetch_page():
+    def fetch_page(page_number):
         url = base.rstrip("/") + "/numbers"
         response = requests.get(
             url,
             headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
-            params={"page": page, "per_page": 100},
+            params={"page": page_number, "per_page": 100},
             timeout=15,
         )
         response.raise_for_status()
         return response.json()
 
-    payload = await asyncio.to_thread(fetch_page)
-    records = list(_records(payload))
-    normalized = []
-    for record in records:
-        number = _field(record, "number", "phone_number", "phone", "msisdn")
-        if not number:
-            continue
-        range_name = _field(record, "range_name", "range", "country", "country_name")
-        normalized.append({"number": number, "country": range_name or "Unknown", "range_name": range_name})
-    added, duplicates = await db.add_pending_provider_numbers(normalized)
-    pagination = payload.get("pagination", {}) if isinstance(payload, dict) else {}
-    try:
-        last_page = max(1, int(pagination.get("last_page", page))) if isinstance(pagination, dict) else page
-    except (TypeError, ValueError):
-        last_page = page
-    next_page = page + 1 if page < last_page else 1
-    await db.set_setting("augestel_numbers_page", str(next_page))
-    return {"page": page, "last_page": last_page, "received": len(normalized), "added": added, "duplicates": duplicates, "next_page": next_page}
+    added = duplicates = received = pages_read = 0
+    page = 1
+    # Stop at provider-reported last_page, an empty page, or a defensive cap.
+    for _ in range(100):
+        payload = await asyncio.to_thread(fetch_page, page)
+        records = list(_records(payload))
+        pages_read += 1
+        normalized = []
+        for record in records:
+            number = _field(record, "number", "phone_number", "phone", "msisdn")
+            if not number:
+                continue
+            country = _field(record, "country_name", "country", "country_code", "iso2", "range_name", "range") or "Unknown"
+            normalized.append({"number": number, "country": country})
+        received += len(normalized)
+
+        # Group by country so the country selector reflects provider inventory.
+        groups = {}
+        for item in normalized:
+            groups.setdefault(item["country"], []).append(item["number"])
+        for country, numbers in groups.items():
+            added_count, duplicate_count = await db.add_phone_numbers_bulk("Any Service", country, numbers)
+            added += added_count
+            duplicates += duplicate_count
+
+        pagination = payload.get("pagination", {}) if isinstance(payload, dict) else {}
+        meta = payload.get("meta", {}) if isinstance(payload, dict) else {}
+        try:
+            last_page = int(
+                pagination.get("last_page")
+                or meta.get("last_page")
+                or (payload.get("last_page") if isinstance(payload, dict) else 0)
+                or 0
+            )
+        except (TypeError, ValueError):
+            last_page = 0
+
+        if not records or (last_page and page >= last_page) or (not last_page and len(records) < 100):
+            break
+        page += 1
+
+    return {
+        "pages_read": pages_read,
+        "received": received,
+        "added": added,
+        "duplicates": duplicates,
+        "next_page": page + 1,
+    }
 
 
 async def poll_augestel(app):
