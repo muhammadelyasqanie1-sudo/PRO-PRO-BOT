@@ -333,7 +333,7 @@ async def admin_add_number(request: web.Request) -> web.Response:
     canonical = next((name for name in known_services if name.casefold() == service.casefold()), None)
     if not canonical or not country or not re.fullmatch(r"\+?\d{7,20}", number):
         return _json({"ok": False, "error": "Enter a service, country and valid international number."}, 400)
-    service = canonical\n    service = canonical
+    service = canonical
     if not await db.add_phone_number(service, country, number):
         return _json({"ok": False, "error": "This number already exists in the inventory."}, 409)
     if activate:
