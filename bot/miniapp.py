@@ -235,19 +235,26 @@ async def request_number(request: web.Request) -> web.Response:
             return _json({"ok": False, "error": "This service is not currently enabled."}, 400)
         _request_times[uid] = time.monotonic()
         candidates = await db.list_available_numbers(service=canonical_service, country=country)
+        assigned = []
         for candidate in candidates:
             if await db.assign_phone_number(candidate["id"], uid):
-                return _json({
-                    "ok": True,
-                    "number": {
-                        "id": candidate["id"],
-                        "service": candidate["service"],
-                        "country": candidate["country"],
-                        "number": candidate["number"],
-                        "created_at": candidate["created_at"],
-                    },
-                    "message": "Number assigned. OTP messages will appear here when the provider delivers them.",
-                }, 201)
+                assigned.append({
+                    "id": candidate["id"],
+                    "service": candidate["service"],
+                    "country": candidate["country"],
+                    "number": candidate["number"],
+                    "created_at": candidate["created_at"],
+                })
+                if len(assigned) == 2:
+                    break
+        if assigned:
+            return _json({
+                "ok": True,
+                "numbers": assigned,
+                # Keep the original singular field for older Mini App clients.
+                "number": assigned[0],
+                "message": f"{len(assigned)} number(s) assigned. OTP messages will appear here when the provider delivers them.",
+            }, 201)
         return _json({"ok": False, "error": "No numbers are available for this selection right now."}, 409)
 
 
