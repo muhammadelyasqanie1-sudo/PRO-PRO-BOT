@@ -207,16 +207,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             error_text = str(exc) if isinstance(exc, RuntimeError) and str(exc).startswith("Please wait") else "⚠️ Augestel sync failed. Check the API key and provider API status, then try again."
             await _edit(q, esc(error_text), InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry sync", callback_data="adm:provider_sync")],[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
             return
-        await _edit(q, f"✅ <b>Augestel page {result['page']}/{result['last_page']} fetched</b>\nNew pending numbers: <b>{result['added']}</b>\nAlready imported: <b>{result['duplicates']}</b>\nReceived: {result['received']}\n\nNo number is visible to users until you approve it and assign a service. Next page: {result['next_page']}.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("🔄 Fetch next page", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+        await _edit(q, f"✅ <b>Augestel inventory sync finished</b>\nPages scanned: <b>{result['page']}</b>\nNew numbers made available: <b>{result['added']}</b>\nDuplicates skipped: <b>{result['duplicates']}</b>\nRecords read: <b>{result['received']}</b>\n\nProvider numbers are now shared stock for all active services. Users choose a service and country; each number can be claimed only once.", InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review older pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("🔄 Sync inventory again", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
 
     elif action == "provider_pending":
         pending = await db.list_pending_provider_numbers(20)
         rows = [[InlineKeyboardButton(f"#{n['id']} · {n['number']} · {n['country']}"[:60], callback_data=f"adm:provider_review:{n['id']}")] for n in pending]
-        rows.append([InlineKeyboardButton("🔄 Sync Augestel page", callback_data="adm:provider_sync")])
+        rows.append([InlineKeyboardButton("🔄 Sync all Augestel inventory", callback_data="adm:provider_sync")])
         rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
         text = "📥 <b>Numbers awaiting approval</b>\nChoose a number, then assign it to an active service."
         if not pending:
-            text = "📥 <b>No numbers awaiting approval.</b>\nUse Sync Augestel page to fetch inventory."
+            text = "📥 <b>No numbers awaiting approval.</b>\nNew provider syncs now add inventory directly to user stock; this list is for older imports only."
         await _edit(q, text, InlineKeyboardMarkup(rows))
 
     elif action == "provider_review":
