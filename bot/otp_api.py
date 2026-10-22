@@ -122,6 +122,10 @@ async def sync_augestel_numbers(db):
     operator_counts = {"Etisalat": 0, "Areba": 0, "AWCC": 0}
     page = 1
     for _ in range(500):
+        # Augestel documents a limit of 5 requests/minute per API key.
+        # Keep inventory pagination below that ceiling (one request every 12 seconds).
+        if page > 1:
+            await asyncio.sleep(12)
         payload = await asyncio.to_thread(fetch_page, page)
         records = list(_records(payload))
         pages_read += 1
