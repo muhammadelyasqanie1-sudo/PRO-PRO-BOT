@@ -186,13 +186,9 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             else:
                 services = list(dict.fromkeys(n["service"] for n in numbers))
             context.user_data["number_services"] = services
-            rows = [
-                [InlineKeyboardButton(service, callback_data=f"number:service:{i}")]
-                for i, service in enumerate(services)
-            ]
             await msg.reply_text(
                 t(lang, "choose_number_service"),
-                reply_markup=InlineKeyboardMarkup(rows),
+                reply_markup=_number_choice_keyboard(services, "service", 0),
             )
     elif key == "menu_language":
         await msg.reply_text(t(lang, "choose_lang"), reply_markup=language_keyboard("lang"))
@@ -201,6 +197,26 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await admin_handlers.open_panel(update, context)
     else:
         await msg.reply_text(t(lang, "unknown"), reply_markup=menu_keyboard(lang, await is_admin(context, user.id)))
+
+
+def _number_choice_keyboard(items: list[str], prefix: str, page: int = 0, page_size: int = 20) -> "InlineKeyboardMarkup":
+    """Keep Telegram inline markup small even when provider inventory has many countries."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    start = max(0, page) * page_size
+    shown = items[start:start + page_size]
+    rows = [
+        [InlineKeyboardButton(str(item)[:60], callback_data=f"number:{prefix}:{start + i}")]
+        for i, item in enumerate(shown)
+    ]
+    navigation = []
+    if start > 0:
+        navigation.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"number:{prefix}_page:{page - 1}"))
+    if start + page_size < len(items):
+        navigation.append(InlineKeyboardButton("Next ➡️", callback_data=f"number:{prefix}_page:{page + 1}"))
+    if navigation:
+        rows.append(navigation)
+    return InlineKeyboardMarkup(rows)
 
 
 async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -212,6 +228,22 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     row = await db.get_user(q.from_user.id)
     lang = row.get("lang") if row else None
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    if len(data) >= 3 and data[1] == "service_page":
+        services = context.user_data.get("number_services", [])
+        page = int(data[2]) if data[2].isdigit() else 0
+        await q.message.reply_text(t(lang, "choose_number_service"), reply_markup=_number_choice_keyboard(services, "service", page))
+        return
+
+    if len(data) >= 3 and data[1] == "country_page":
+        countries = context.user_data.get("number_countries", [])
+        page = int(data[2]) if data[2].isdigit() else 0
+        service = context.user_data.get("number_selected_service", "")
+        await q.message.reply_text(
+            t(lang, "choose_number_country", service=html.escape(service)),
+            reply_markup=_number_choice_keyboard(countries, "country", page),
+        )
+        return
 
     if len(data) >= 3 and data[1] == "service":
         try:
@@ -231,13 +263,9 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
         context.user_data["number_selected_service"] = service
         context.user_data["number_countries"] = countries
-        rows = [
-            [InlineKeyboardButton(country, callback_data=f"number:country:{i}")]
-            for i, country in enumerate(countries)
-        ]
         await q.message.reply_text(
             t(lang, "choose_number_country", service=html.escape(service)),
-            reply_markup=InlineKeyboardMarkup(rows),
+            reply_markup=_number_choice_keyboard(countries, "country", 0),
         )
         return
 
