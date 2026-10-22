@@ -105,7 +105,7 @@ async def sync_augestel_numbers(db):
     added = duplicates = received = pages_read = 0
     page = 1
     # Stop at provider-reported last_page, an empty page, or a defensive cap.
-    for _ in range(100):
+    for _ in range(500):
         payload = await asyncio.to_thread(fetch_page, page)
         records = list(_records(payload))
         pages_read += 1
@@ -142,6 +142,8 @@ async def sync_augestel_numbers(db):
         if not records or (last_page and page >= last_page) or (not last_page and len(records) < 100):
             break
         page += 1
+    else:
+        raise RuntimeError("Inventory scan reached the 500-page safety limit; not all pages were imported.")
 
     # If the owner has not configured service visibility yet, enable the
     # standard bot catalog so provider stock can be offered under every service.
