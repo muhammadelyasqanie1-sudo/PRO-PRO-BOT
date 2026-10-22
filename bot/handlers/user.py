@@ -355,17 +355,32 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if not numbers:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
-        # Try each candidate in case another user claims the first one simultaneously.
+        # Allocate up to two distinct numbers from this service/country only.
+        # Each number is claimed independently so concurrent users cannot get duplicates.
+        assigned = []
         for item in numbers:
             if await db.assign_phone_number(int(item["id"]), q.from_user.id):
-                context.user_data["last_number_request_at"] = time.monotonic()
-                await q.message.reply_text(t(
-                    lang, "number_added",
-                    service=html.escape(service),
-                    country=html.escape(item["country"]),
-                    number=html.escape(item["number"]),
-                ))
-                return
+                assigned.append(item)
+                if len(assigned) == 2:
+                    break
+        if assigned:
+            context.user_data["last_number_request_at"] = time.monotonic()
+            blocks = []
+            for index, item in enumerate(assigned, 1):
+                blocks.append(
+                    f"📱 <b>Number {index}</b>\n"
+                    + t(lang, "number_added",
+                        service=html.escape(service),
+                        country=html.escape(item["country"]),
+                        number=html.escape(item["number"]))
+                )
+            if len(assigned) == 1:
+                await q.message.reply_text(
+                    "\n\n".join(blocks) + "\n\n⚠️ Only one number is available in this selection right now."
+                )
+            else:
+                await q.message.reply_text("\n\n".join(blocks))
+            return
         await q.message.reply_text(t(lang, "no_numbers"))
         return
 
