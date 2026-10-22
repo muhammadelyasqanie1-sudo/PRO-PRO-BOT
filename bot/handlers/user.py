@@ -229,6 +229,17 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     lang = row.get("lang") if row else None
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+    if len(data) >= 3 and data[1] == "back" and data[2] == "services":
+        services = await db.list_active_services()
+        available = await db.list_available_numbers(services=services)
+        services_with_stock = list(dict.fromkeys(item["service"] for item in available))
+        context.user_data["number_services"] = services_with_stock
+        if not services_with_stock:
+            await q.message.reply_text(t(lang, "no_numbers"))
+        else:
+            await q.message.reply_text(t(lang, "choose_number_service"), reply_markup=_number_choice_keyboard(services_with_stock, "service", 0))
+        return
+
     if len(data) >= 3 and data[1] == "service_page":
         services = context.user_data.get("number_services", [])
         page = int(data[2]) if data[2].isdigit() else 0
@@ -374,12 +385,15 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         country=html.escape(item["country"]),
                         number=html.escape(item["number"]))
                 )
+            buttons = [[InlineKeyboardButton("🔄 Get another pair / شماره‌های جدید", callback_data="number:get:0")], [InlineKeyboardButton("⬅️ Back to services / برگشت به سرویس‌ها", callback_data="number:back:services")]]
+            otp_link = (await db.get_setting("otp_channel_link")).strip()
+            if otp_link.startswith("https://t.me/"):
+                buttons.insert(1, [InlineKeyboardButton("📢 OTP Channel / کانال کدها", url=otp_link)])
+            markup = InlineKeyboardMarkup(buttons)
             if len(assigned) == 1:
-                await q.message.reply_text(
-                    "\n\n".join(blocks) + "\n\n⚠️ Only one number is available in this selection right now."
-                )
+                await q.message.reply_text("\\n\\n".join(blocks) + "\\n\\n⚠️ Only one number is available in this selection right now.", reply_markup=markup)
             else:
-                await q.message.reply_text("\n\n".join(blocks))
+                await q.message.reply_text("\\n\\n".join(blocks), reply_markup=markup)
             return
         await q.message.reply_text(t(lang, "no_numbers"))
         return
