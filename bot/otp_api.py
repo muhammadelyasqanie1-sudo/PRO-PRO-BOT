@@ -67,11 +67,12 @@ def _fetch(base, key):
     return response.json()
 
 async def sync_augestel_numbers(db):
-    """Read all paginated provider inventory pages and publish numbers to user stock.
+    """Import provider inventory, limiting Afghanistan's three named carriers to 50 each.
 
-    Service metadata returned by the provider is preserved. If the provider
-    returns no service metadata, numbers are placed under 'Other Services' so
-    they are not falsely counted as available for every service.
+    Carrier metadata is preserved in the country label as 'Afghanistan · Carrier'
+    so the user flow can offer a separate operator choice without risking a DB schema
+    migration. Numbers without trustworthy carrier metadata remain in their original
+    country bucket; we never guess an operator from a phone prefix.
     """
     base = os.getenv("AUGESTEL_API_BASE", "https://augestel.com/api/v1/iprn").strip()
     keys = await db.list_active_api_keys()
@@ -93,42 +94,62 @@ async def sync_augestel_numbers(db):
     def fetch_page(page_number):
         url = base.rstrip("/") + "/numbers"
         response = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
-            params={"page": page_number, "per_page": 100},
-            timeout=15,
+            url, headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+            params={"page": page_number, "per_page": 100}, timeout=15,
         )
         response.raise_for_status()
         return response.json()
 
+    def detect_operator(record):
+        raw = _field(record, "operator_name", "operator", "carrier_name", "carrier",
+                     "network_name", "network", "telecom", "range_name", "range")
+        folded = raw.casefold().replace("-", " ").replace("_", " ")
+        if "etisalat" in folded:
+            return "Etisalat"
+        if "areeba" in folded or "areba" in folded or "aria" in folded:
+            return "Areba"
+        if "awcc" in folded or "afghan wireless" in folded or "afghan-w" in folded:
+            return "AWCC"
+        return ""
+
+    def is_afghanistan(record, number):
+        country = _field(record, "country_name", "country", "country_code", "iso2", "country_iso")
+        folded = country.casefold()
+        return ("afghanistan" in folded or folded in ("af", "afg", "93", "+93")
+                or (not country and _digits(number).startswith("93")))
+
     added = duplicates = received = pages_read = 0
+    operator_counts = {"Etisalat": 0, "Areba": 0, "AWCC": 0}
     page = 1
-    # Stop at provider-reported last_page, an empty page, or a defensive cap.
     for _ in range(500):
         payload = await asyncio.to_thread(fetch_page, page)
         records = list(_records(payload))
         pages_read += 1
         normalized = []
+        active_names = await db.list_active_services()
+        defaults = ["WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook",
+                    "Gmail", "Gaming", "Other Services"]
+        custom_names = [v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()]
+        known_names = list(dict.fromkeys(active_names + defaults + custom_names))
+
         for record in records:
             number = _field(record, "number", "phone_number", "phone", "msisdn")
             if not number:
                 continue
+            received += 1
             country = _field(record, "country_name", "country", "country_code", "iso2", "range_name", "range") or "Unknown"
-            # Preserve provider service metadata where available. Generic numbers
-            # go into one explicit category, not every service's stock.
             service = _field(record, "service_name", "service", "app", "product", "platform") or "Other Services"
-            active_names = await db.list_active_services()
-            defaults = [
-                "WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook",
-                "Gmail", "Gaming", "Other Services",
-            ]
-            custom_names = [v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()]
-            known_names = list(dict.fromkeys(active_names + defaults + custom_names))
-            canonical_service = next((name for name in known_names if name.casefold() == service.casefold()), service)
-            normalized.append({"number": number, "country": country, "service": canonical_service[:40]})
-        received += len(normalized)
+            canonical_service = next((name for name in known_names if name.casefold() == service.casefold()), service)[:40]
+            operator = detect_operator(record) if is_afghanistan(record, number) else ""
+            if operator:
+                if operator_counts[operator] >= 50:
+                    continue
+                operator_counts[operator] += 1
+                country_label = f"Afghanistan · {operator}"
+            else:
+                country_label = country[:60]
+            normalized.append({"number": number, "country": country_label, "service": canonical_service})
 
-        # Group by service and country so stock remains independent per service.
         groups = {}
         for item in normalized:
             groups.setdefault((item["service"], item["country"]), []).append(item["number"])
@@ -140,38 +161,22 @@ async def sync_augestel_numbers(db):
         pagination = payload.get("pagination", {}) if isinstance(payload, dict) else {}
         meta = payload.get("meta", {}) if isinstance(payload, dict) else {}
         try:
-            last_page = int(
-                pagination.get("last_page")
-                or meta.get("last_page")
-                or (payload.get("last_page") if isinstance(payload, dict) else 0)
-                or 0
-            )
+            last_page = int(pagination.get("last_page") or meta.get("last_page")
+                            or (payload.get("last_page") if isinstance(payload, dict) else 0) or 0)
         except (TypeError, ValueError):
             last_page = 0
-
         if not records or (last_page and page >= last_page) or (not last_page and len(records) < 100):
             break
         page += 1
     else:
         raise RuntimeError("Inventory scan reached the 500-page safety limit; not all pages were imported.")
 
-    # If the owner has not configured service visibility yet, enable the
-    # standard bot catalog so provider stock can be offered under every service.
-    active_services = await db.list_active_services()
-    if not active_services:
-        defaults = [
-            "WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook",
-            "Gmail", "Gaming", "Other Services",
-        ]
-        custom = [v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()]
-        await db.set_setting("active_services", "\n".join(dict.fromkeys(defaults + custom)))
-
+    if not await db.list_active_services():
+        await db.set_setting("active_services", "\n".join(dict.fromkeys(defaults + custom_names)))
     return {
-        "pages_read": pages_read,
-        "received": received,
-        "added": added,
-        "duplicates": duplicates,
-        "next_page": page + 1,
+        "pages_read": pages_read, "received": received, "added": added,
+        "duplicates": duplicates, "next_page": page + 1,
+        "operators": operator_counts,
     }
 
 
