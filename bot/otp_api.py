@@ -131,17 +131,18 @@ async def sync_augestel_numbers(db):
             duplicates += duplicate_count
 
         pagination = payload.get("pagination", {}) if isinstance(payload, dict) else {}
-        try:
-            reported_last = int(pagination.get("last_page", page)) if isinstance(pagination, dict) else page
-        except (TypeError, ValueError):
-            reported_last = page
-        last_page = max(page, reported_last)
+        has_last_page = isinstance(pagination, dict) and pagination.get("last_page") is not None
+        if has_last_page:
+            try:
+                last_page = max(page, int(pagination["last_page"]))
+            except (TypeError, ValueError):
+                has_last_page = False
         pages_read += 1
-        if page >= last_page:
-            break
-        # If the provider omits pagination metadata, continue while a full page
-        # was returned. A hard cap protects against malformed provider responses.
-        if not isinstance(payload, dict) or not isinstance(payload.get("pagination"), dict):
+        if has_last_page:
+            if page >= last_page:
+                break
+        else:
+            # Without pagination metadata, a full page indicates more data may exist.
             if len(records) < 100:
                 break
             last_page = page + 1
