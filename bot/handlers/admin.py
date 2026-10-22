@@ -37,12 +37,12 @@ PROMPTS = {
 CANCEL_HINT = "\n\nSend /cancel to abort."
 
 
-NUMBER_SERVICES = ["WhatsApp", "Telegram", "TikTok", "Instagram", "Facebook", "Gmail", "Gaming", "Other Services"]
 NUMBER_COUNTRIES = ["Afghanistan", "United States", "United Kingdom", "Canada", "Germany", "France", "India", "Pakistan", "Turkey", "Russia", "Indonesia", "Brazil", "Nigeria", "Philippines", "Other"]
 
 
-def _number_service_keyboard() -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in NUMBER_SERVICES]
+def _number_service_keyboard(services: list[str]) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in services]
+    rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
     rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="adm:home")])
     return InlineKeyboardMarkup(rows)
 
@@ -179,7 +179,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _edit(q, "Custom countries / کشورهای سفارشی are used in the Add Number flow. / در بخش افزودن شماره استفاده می‌شوند.", back_keyboard())
 
     elif action == "services":
-        candidates = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
+        candidates = list(dict.fromkeys([v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
         active = {v.casefold() for v in await db.list_active_services()}
         rows = [[InlineKeyboardButton(("🟢 " if s.casefold() in active else "⚪ ") + s, callback_data=f"adm:service_toggle:{i}")] for i, s in enumerate(candidates)]
         rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
@@ -207,7 +207,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             error_text = str(exc) if isinstance(exc, RuntimeError) and str(exc).startswith("Please wait") else "⚠️ Augestel sync failed. Check the API key and provider API status, then try again."
             await _edit(q, esc(error_text), InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry sync", callback_data="adm:provider_sync")],[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
             return
-        await _edit(q, f"✅ <b>Provider inventory sync complete</b>\nPages read: <b>{result['pages_read']}</b>\nNew numbers made available: <b>{result['added']}</b>\nDuplicates skipped: <b>{result['duplicates']}</b>\nRecords read: <b>{result['received']}</b>\n\nImported numbers are now available for the bot's active services. Each number can be assigned to only one user.", InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage number stock", callback_data="adm:num_stock")],[InlineKeyboardButton("🔄 Sync again", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+        await _edit(q, f"✅ <b>Provider inventory sync complete</b>\nPages read: <b>{result['pages_read']}</b>\nNew numbers made available: <b>{result['added']}</b>\nDuplicates skipped: <b>{result['duplicates']}</b>\nRecords read: <b>{result['received']}</b>\n\nImported provider numbers remain pending until an administrator approves each number for one specific service. Each number can be assigned to only one user.", InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage number stock", callback_data="adm:num_stock")],[InlineKeyboardButton("🔄 Sync again", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
 
     elif action == "provider_pending":
         pending = await db.list_pending_provider_numbers(20)
@@ -250,7 +250,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     elif action == "num_add":
         context.user_data.pop("num_add", None)
-        services = list(dict.fromkeys(NUMBER_SERVICES + [v for v in (await db.get_setting("custom_services")).split("\n") if v]))
+        services = list(dict.fromkeys([v for v in (await db.get_setting("custom_services")).split("\n") if v] + await db.list_phone_number_services()))
         rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in services]
         rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
         rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="adm:home")])
