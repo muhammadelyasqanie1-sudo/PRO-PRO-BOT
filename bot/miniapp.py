@@ -357,6 +357,106 @@ async def admin_toggle_service(request: web.Request) -> web.Response:
     return _json({"ok": True, "service": canonical, "active": active})
 
 
+async def augestel_webhook(request: web.Request) -> web.Response:
+    """Receive Augestel webhook events and relay verified delivered SMS messages."""
+    secret = os.getenv("AUGESTEL_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        return _json({"ok": False, "error": "Webhook secret is not configured."}, 503)
+
+    raw_body = await request.read()
+    signature = request.headers.get("X-Augestel-Signature", "").strip()
+    expected = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    if not signature or not hmac.compare_digest(expected, signature):
+        return _json({"ok": False, "error": "Invalid webhook signature."}, 401)
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return _json({"ok": False, "error": "Invalid JSON body."}, 400)
+    if not isinstance(payload, dict):
+        return _json({"ok": False, "error": "Invalid event payload."}, 400)
+
+    event = str(payload.get("event") or request.headers.get("X-Augestel-Event", "")).strip()
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return _json({"ok": False, "error": "Missing event data."}, 400)
+
+    # Other event types are acknowledged so Augestel does not retry events this
+    # receiver does not currently need to process.
+    if event != "message.received":
+        log.info("Acknowledged Augestel webhook event: %s", event[:60])
+        return _json({"ok": True, "event": event})
+
+    number = str(data.get("number") or "").strip()
+    message = str(data.get("message") or "").strip()
+    status = str(data.get("status") or "").strip().lower()
+    if not number or not message:
+        return _json({"ok": False, "error": "Message event is missing number or message."}, 400)
+    if status and status != "delivered":
+        return _json({"ok": True, "ignored": "message was not delivered"})
+
+    received = str(data.get("received_at") or payload.get("timestamp") or "")
+    source = str(data.get("source") or "SMS")
+    raw_id = str(data.get("id") or data.get("message_id") or "")
+    dedupe = raw_id or hashlib.sha256(
+        f"{number}|{received}|{source}|{message}".encode("utf-8")
+    ).hexdigest()
+
+    telegram_app = request.app["telegram_app"]
+    db = telegram_app.bot_data["db"]
+    if not await db.save_otp_once(dedupe, number, message, received):
+        return _json({"ok": True, "duplicate": True})
+
+    assigned = await db.assigned_users_for_number(number)
+    if not assigned:
+        rows = await db._all(
+            "SELECT number, assigned_user_id FROM phone_numbers "
+            "WHERE status='assigned' AND assigned_user_id IS NOT NULL"
+        )
+        digits = lambda value: "".join(ch for ch in str(value or "") if ch.isdigit())
+        assigned = [
+            int(row["assigned_user_id"]) for row in rows
+            if digits(row["number"]) == digits(number)
+        ]
+
+    if assigned:
+        import re
+        match = re.search(r"(?<!\\d)(\\d{3}-\\d{3}|\\d{4,8})(?!\\d)", message)
+        code = match.group(1) if match else "not detected"
+        country = str(data.get("country") or data.get("country_name") or "N/A")
+        values = {
+            "{language}": "English / دری",
+            "{service}": source,
+            "{country}": country,
+            "{number}": number,
+            "{code}": code,
+            "{time}": received or "N/A",
+            "{message}": message[:2500],
+        }
+        template = await db.get_setting(
+            "otp_template",
+            "🔐 <b>NUM BOT</b>\\n📱 {service}\\n🌍 {country}\\n📞 <code>{number}</code>\\n🔢 Code: <code>{code}</code>\\n🕒 {time}\\n🗣 {language}\\n<pre>{message}</pre>",
+        )
+        import html
+        text_message = template
+        for token, value in values.items():
+            text_message = text_message.replace(token, html.escape(value))
+        for uid in set(assigned):
+            try:
+                await telegram_app.bot.send_message(chat_id=uid, text=text_message)
+            except Exception as exc:
+                log.warning("Could not deliver webhook OTP to user %s (%s).", uid, type(exc).__name__)
+
+        channel_id = os.getenv("OTP_CHANNEL_ID", "").strip()
+        if channel_id:
+            try:
+                await telegram_app.bot.send_message(chat_id=int(channel_id), text=text_message)
+            except Exception as exc:
+                log.warning("Could not post webhook OTP to channel (%s).", type(exc).__name__)
+
+    return _json({"ok": True, "event": event, "relayed": bool(assigned)})
+
+
 async def start_web_server(telegram_app) -> web.AppRunner | None:
     """Start the Mini App server on Railway's PORT (or WEB_PORT locally)."""
     port_text = os.getenv("PORT", os.getenv("WEB_PORT", "8080")).strip()
@@ -369,6 +469,7 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server["telegram_app"] = telegram_app
     server.router.add_get("/", index)
     server.router.add_get("/health", health)
+    server.router.add_post("/webhooks/augestel", augestel_webhook)
     server.router.add_get("/api/me", me)
     server.router.add_get("/api/catalog", catalog)
     server.router.add_get("/api/sessions", sessions)
