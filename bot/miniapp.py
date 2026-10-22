@@ -359,13 +359,13 @@ async def admin_create_service(request: web.Request) -> web.Response:
         return _json({"ok": False, "error": "Invalid request body."}, 400)
     if not service or len(service) > 40 or any(ord(ch) < 32 for ch in service):
         return _json({"ok": False, "error": "Service name must be 1–40 characters."}, 400)
-    custom = [v.strip() for v in (await db.get_setting("custom_services")).split("\\n") if v.strip()]
+    custom = [v.strip() for v in (await db.get_setting("custom_services")) .split("\n") if v.strip()]
     existing = list(dict.fromkeys(custom + await db.list_phone_number_services()))
     canonical = next((v for v in existing if v.casefold() == service.casefold()), None)
     if canonical:
         return _json({"ok": False, "error": "That service already exists."}, 409)
     custom.append(service)
-    await db.set_setting("custom_services", "\\n".join(custom))
+    await db.set_setting("custom_services", "\n".join(custom))
     active = {v.casefold() for v in await db.list_active_services()}
     if service.casefold() not in active:
         await db.toggle_service_active(service)
@@ -386,7 +386,7 @@ async def admin_toggle_service(request: web.Request) -> web.Response:
         service = str(payload.get("service", "")).strip()[:40]
     except (json.JSONDecodeError, AttributeError, TypeError):
         return _json({"ok": False, "error": "Invalid request body."}, 400)
-    services = await db.list_phone_number_services()
+    services = list(dict.fromkeys([v.strip() for v in (await db.get_setting("custom_services")).split("\n") if v.strip()] + await db.list_phone_number_services()))
     canonical = next((item for item in services if item.casefold() == service.casefold()), None)
     if not canonical:
         return _json({"ok": False, "error": "Service not found in inventory."}, 404)
