@@ -179,7 +179,9 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await msg.reply_text(t(lang, "no_numbers"))
         else:
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            services = list(dict.fromkeys(n["service"] for n in numbers))
+            # Show every enabled service, even when provider inventory is generic.
+            # The country step checks whether a number is actually available.
+            services = list(dict.fromkeys(active_services))
             context.user_data["number_services"] = services
             rows = [
                 [InlineKeyboardButton(service, callback_data=f"number:service:{i}")]
@@ -278,7 +280,7 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
         # Try each candidate in case another user claims the first one simultaneously.
         for item in numbers:
-            if await db.assign_phone_number(int(item["id"]), q.from_user.id):
+            if await db.assign_phone_number(int(item["id"]), q.from_user.id, service=service):
                 context.user_data["last_number_request_at"] = time.monotonic()
                 await q.message.reply_text(t(
                     lang, "number_added",
