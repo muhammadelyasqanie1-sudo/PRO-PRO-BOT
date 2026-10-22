@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
@@ -119,4 +120,10 @@ def main() -> None:
         level=getattr(logging, settings.log_level, logging.INFO),
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)  # keeps the bot token out of the logs
+    # Python 3.14 no longer guarantees a current event loop in the main thread.
+    # python-telegram-bot's run_polling() expects one to exist before it starts.
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
     build_application(settings).run_polling()
