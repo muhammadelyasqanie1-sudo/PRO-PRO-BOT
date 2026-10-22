@@ -309,18 +309,25 @@ class Database:
         return [str(r["service"]) for r in rows]
 
     async def list_available_numbers(self, service: str | None = None, country: str | None = None, services: list[str] | None = None) -> list[dict[str, Any]]:
+        """List stock for a chosen service, including unclaimed provider-wide numbers."""
         sql = "SELECT * FROM phone_numbers WHERE status='available'"
         params: list[Any] = []
         if services is not None:
             if not services:
                 return []
-            sql += " AND service IN (" + ",".join("?" for _ in services) + ")"
+            marks = ",".join("?" for _ in services)
+            sql += f" AND (service IN ({marks}) OR service='All Services')"
             params.extend(services)
         elif service:
-            sql += " AND service=?"; params.append(service)
+            if service.casefold() == "all services":
+                sql += " AND service='All Services'"
+            else:
+                sql += " AND (service=? OR service='All Services')"
+                params.append(service)
         if country:
-            sql += " AND country=?"; params.append(country)
-        sql += " ORDER BY id DESC LIMIT 50"
+            sql += " AND country=?"
+            params.append(country)
+        sql += " ORDER BY id DESC"
         return await self._all(sql, tuple(params))
 
     async def add_pending_provider_numbers(self, records: list[dict[str, str]]) -> tuple[int, int]:
@@ -396,7 +403,15 @@ class Database:
     async def get_phone_number(self, number_id: int) -> Optional[dict[str, Any]]:
         return await self._one("SELECT * FROM phone_numbers WHERE id=?", (number_id,))
 
-    async def assign_phone_number(self, number_id: int, user_id: int) -> bool:
+    async def assign_phone_number(self, number_id: int, user_id: int, service: str | None = None) -> bool:
+        """Atomically claim one number and bind provider-wide stock to the requested service."""
+        if service:
+            return await self._exec(
+                "UPDATE phone_numbers SET status='assigned', assigned_user_id=?, "
+                "service=CASE WHEN service='All Services' THEN ? ELSE service END "
+                "WHERE id=? AND status='available'",
+                (user_id, service[:40], number_id),
+            ) == 1
         return await self._exec(
             "UPDATE phone_numbers SET status='assigned', assigned_user_id=? WHERE id=? AND status='available'",
             (user_id, number_id),
