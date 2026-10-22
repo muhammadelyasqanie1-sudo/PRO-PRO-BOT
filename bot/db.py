@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import re
 from typing import Any, Optional
 
 import aiosqlite
@@ -94,6 +95,12 @@ def _iso(dt: datetime) -> str:
 
 def _now() -> str:
     return _iso(datetime.now(timezone.utc))
+
+
+def _normalize_phone_number(value: str) -> str:
+    """Store international phone numbers consistently with one leading plus."""
+    digits = re.sub(r"[^0-9]", "", str(value or ""))
+    return "+" + digits if 7 <= len(digits) <= 20 else ""
 
 
 class Database:
@@ -258,10 +265,13 @@ class Database:
 
     # ---------- manually managed phone-number inventory ----------
     async def add_phone_number(self, service: str, country: str, number: str) -> bool:
+        number = _normalize_phone_number(number)
+        if not service.strip() or not country.strip() or not number:
+            return False
         try:
             await self._exec(
                 "INSERT INTO phone_numbers(service,country,number,status,created_at) VALUES(?,?,?,'available',?)",
-                (service, country, number, _now()),
+                (service.strip()[:40], country.strip()[:60], number, _now()),
             )
             return True
         except aiosqlite.IntegrityError:
@@ -278,7 +288,11 @@ class Database:
         duplicates = 0
         now = _now()
         async with self.conn.execute("BEGIN"):
-            for number in numbers:
+            for raw_number in numbers:
+                number = _normalize_phone_number(raw_number)
+                if not number:
+                    duplicates += 1
+                    continue
                 cur = await self.conn.execute(
                     "INSERT OR IGNORE INTO phone_numbers(service,country,number,status,created_at) "
                     "VALUES(?,?,?,'available',?)",
@@ -341,7 +355,7 @@ class Database:
         await self.conn.execute("BEGIN IMMEDIATE")
         try:
             for record in records:
-                number = (record.get("number") or "").strip()
+                number = _normalize_phone_number(record.get("number") or "")
                 if not number:
                     continue
                 country = (record.get("country") or "Unknown").strip()[:60] or "Unknown"
