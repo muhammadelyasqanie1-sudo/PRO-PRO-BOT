@@ -110,6 +110,11 @@ class Database:
             columns = {row[1] for row in await cur.fetchall()}
         if "points" not in columns:
             await self.conn.execute("ALTER TABLE users ADD COLUMN points INTEGER NOT NULL DEFAULT 0")
+        # Migrate legacy shared provider stock into one explicit service bucket.
+        # This prevents the same available number being counted under every app.
+        await self.conn.execute(
+            "UPDATE phone_numbers SET service='Other Services' WHERE lower(service)='any service'"
+        )
         await self.conn.commit()
 
     async def close(self) -> None:
