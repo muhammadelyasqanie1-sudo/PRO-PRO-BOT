@@ -179,7 +179,12 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await msg.reply_text(t(lang, "no_numbers"))
         else:
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            services = list(dict.fromkeys(n["service"] for n in numbers))
+            # Provider-imported numbers use Any Service, so expose every active
+            # service in the bot rather than displaying the internal stock label.
+            if any(n["service"].casefold() == "any service" for n in numbers):
+                services = active_services
+            else:
+                services = list(dict.fromkeys(n["service"] for n in numbers))
             context.user_data["number_services"] = services
             rows = [
                 [InlineKeyboardButton(service, callback_data=f"number:service:{i}")]
