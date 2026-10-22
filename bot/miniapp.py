@@ -146,23 +146,44 @@ async def catalog(request: web.Request) -> web.Response:
     if not active_services:
         return _json({"ok": True, "services": [], "total_available": 0})
     placeholders = ",".join("?" for _ in active_services)
+    # Provider inventory is stored as "Any Service" after API sync.
+    # Show that stock under every enabled service, as the bot does.
     rows = await db._all(
         f"SELECT service, country, COUNT(*) AS count FROM phone_numbers "
-        f"WHERE status='available' AND service IN ({placeholders}) "
+        f"WHERE status='available' AND (service IN ({placeholders}) OR service='Any Service') "
         "GROUP BY service, country ORDER BY service COLLATE NOCASE, country COLLATE NOCASE",
         tuple(active_services),
     )
-    grouped: dict[str, list[dict]] = {}
-    total = 0
+    direct: dict[str, dict[str, int]] = {}
+    provider: dict[str, int] = {}
+    total_available = 0
     for item in rows:
+        service_name = str(item["service"])
+        country_name = str(item["country"])
         count = int(item["count"])
-        total += count
-        grouped.setdefault(item["service"], []).append({"country": item["country"], "count": count})
-    services = [
-        {"name": name, "countries": countries, "count": sum(c["count"] for c in countries)}
-        for name, countries in grouped.items()
-    ]
-    return _json({"ok": True, "services": services, "total_available": total})
+        total_available += count
+        if service_name.casefold() == "any service":
+            provider[country_name] = provider.get(country_name, 0) + count
+        else:
+            direct.setdefault(service_name.casefold(), {})[country_name] = count
+
+    services = []
+    for name in active_services:
+        country_counts = dict(provider)
+        for country_name, count in direct.get(name.casefold(), {}).items():
+            country_counts[country_name] = country_counts.get(country_name, 0) + count
+        countries = [
+            {"country": country_name, "count": count}
+            for country_name, count in sorted(country_counts.items(), key=lambda pair: pair[0].casefold())
+            if count > 0
+        ]
+        if countries:
+            services.append({
+                "name": name,
+                "countries": countries,
+                "count": sum(item["count"] for item in countries),
+            })
+    return _json({"ok": True, "services": services, "total_available": total_available})
 
 
 async def sessions(request: web.Request) -> web.Response:
@@ -235,6 +256,28 @@ async def request_number(request: web.Request) -> web.Response:
                     "message": "Number assigned. OTP messages will appear here when the provider delivers them.",
                 }, 201)
         return _json({"ok": False, "error": "No numbers are available for this selection right now."}, 409)
+
+
+async def admin_provider_sync(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    uid = session["auth"]["user_id"]
+    settings = session["app"].bot_data["settings"]
+    db = session["db"]
+    if uid != settings.owner_id and not await db.is_admin(uid):
+        return _json({"ok": False, "error": "Administrator access required."}, 403)
+    from .otp_api import sync_augestel_numbers
+    try:
+        result = await sync_augestel_numbers(db)
+    except RuntimeError as exc:
+        message = str(exc)
+        status = 429 if "wait at least" in message.lower() else 502
+        return _json({"ok": False, "error": message if status == 429 else "Provider API sync failed. Check the active API key and provider API status."}, status)
+    except Exception as exc:
+        log.warning("Mini App provider inventory sync failed (%s).", type(exc).__name__)
+        return _json({"ok": False, "error": "Provider API sync failed. Check the active API key and provider API status."}, 502)
+    return _json({"ok": True, "sync": result})
 
 
 async def admin_overview(request: web.Request) -> web.Response:
@@ -338,6 +381,7 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server.router.add_get("/api/sessions", sessions)
     server.router.add_post("/api/number", request_number)
     server.router.add_get("/api/admin/overview", admin_overview)
+    server.router.add_post("/api/admin/provider-sync", admin_provider_sync)
     server.router.add_post("/api/admin/number", admin_add_number)
     server.router.add_post("/api/admin/service", admin_toggle_service)
     runner = web.AppRunner(server, access_log=None)
