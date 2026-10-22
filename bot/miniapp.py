@@ -333,13 +333,42 @@ async def admin_add_number(request: web.Request) -> web.Response:
     service = next((name for name in known_services if name.casefold() == service.casefold()), service)
     if not service or not country or not re.fullmatch(r"\+?\d{7,20}", number):
         return _json({"ok": False, "error": "Enter a service, country and valid international number."}, 400)
-    if not await db.add_phone_number(service, country, number):
+    service = canonical\n    if not await db.add_phone_number(service, country, number):
         return _json({"ok": False, "error": "This number already exists in the inventory."}, 409)
     if activate:
         active = {name.casefold() for name in await db.list_active_services()}
         if service.casefold() not in active:
             await db.toggle_service_active(service)
     return _json({"ok": True, "message": "Number added to inventory.", "number": number}, 201)
+
+
+async def admin_create_service(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    uid = session["auth"]["user_id"]
+    settings = session["app"].bot_data["settings"]
+    db = session["db"]
+    if uid != settings.owner_id and not await db.is_admin(uid):
+        return _json({"ok": False, "error": "Administrator access required."}, 403)
+    try:
+        payload = await request.json()
+        service = str(payload.get("service", "")).strip()
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return _json({"ok": False, "error": "Invalid request body."}, 400)
+    if not service or len(service) > 40 or any(ord(ch) < 32 for ch in service):
+        return _json({"ok": False, "error": "Service name must be 1–40 characters."}, 400)
+    custom = [v.strip() for v in (await db.get_setting("custom_services")).split("\\n") if v.strip()]
+    existing = list(dict.fromkeys(custom + await db.list_phone_number_services()))
+    canonical = next((v for v in existing if v.casefold() == service.casefold()), None)
+    if canonical:
+        return _json({"ok": False, "error": "That service already exists."}, 409)
+    custom.append(service)
+    await db.set_setting("custom_services", "\\n".join(custom))
+    active = {v.casefold() for v in await db.list_active_services()}
+    if service.casefold() not in active:
+        await db.toggle_service_active(service)
+    return _json({"ok": True, "service": service, "active": True}, 201)
 
 
 async def admin_toggle_service(request: web.Request) -> web.Response:
@@ -484,7 +513,7 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server.router.add_get("/api/admin/overview", admin_overview)
     server.router.add_post("/api/admin/provider-sync", admin_provider_sync)
     server.router.add_post("/api/admin/number", admin_add_number)
-    server.router.add_post("/api/admin/service", admin_toggle_service)
+    server.router.add_post("/api/admin/service", admin_toggle_service)\n    server.router.add_post("/api/admin/services", admin_create_service)
     runner = web.AppRunner(server, access_log=None)
     await runner.setup()
     host = os.getenv("WEB_HOST", "0.0.0.0")
