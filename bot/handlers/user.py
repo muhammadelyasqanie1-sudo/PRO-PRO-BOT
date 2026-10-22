@@ -245,6 +245,16 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return
 
+    if len(data) >= 3 and data[1] == "operator_page":
+        operators = context.user_data.get("number_operators", [])
+        page = int(data[2]) if data[2].isdigit() else 0
+        country = context.user_data.get("number_base_country", "")
+        await q.message.reply_text(
+            f"🌐 Country: <b>{html.escape(country)}</b>\nChoose an operator / اپراتور را انتخاب کنید:",
+            reply_markup=_number_choice_keyboard(operators, "operator", page),
+        )
+        return
+
     if len(data) >= 3 and data[1] == "service":
         try:
             index = int(data[2])
@@ -257,7 +267,8 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await q.message.reply_text(t(lang, "no_numbers"))
             return
         numbers = await db.list_available_numbers(service=service)
-        countries = list(dict.fromkeys(n["country"] for n in numbers))
+        # Operator-tagged Afghan stock is grouped under a display country label.
+        countries = list(dict.fromkeys((n["country"].split(" · ", 1)[0]) for n in numbers))
         if not countries:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
@@ -277,12 +288,47 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except (ValueError, IndexError, KeyError):
             await q.message.reply_text(t(lang, "no_numbers"))
             return
+        numbers = await db.list_available_numbers(service=service)
+        matching = [n for n in numbers if n["country"] == country or n["country"].startswith(country + " · ")]
+        if not matching:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        operators = list(dict.fromkeys(n["country"].split(" · ", 1)[1] for n in matching if " · " in n["country"]))
+        context.user_data["number_base_country"] = country
+        if operators:
+            context.user_data["number_operators"] = operators
+            context.user_data["number_operator_country_map"] = {
+                n["country"].split(" · ", 1)[1]: n["country"] for n in matching if " · " in n["country"]
+            }
+            await q.message.reply_text(
+                f"🌐 Country: <b>{html.escape(country)}</b>\nChoose an operator / اپراتور را انتخاب کنید:",
+                reply_markup=_number_choice_keyboard(operators, "operator", 0),
+            )
+            return
+        context.user_data["number_selected_country"] = country
+        await q.message.reply_text(
+            t(lang, "confirm_get_number", country=html.escape(country)),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(t(lang, "get_number_button"), callback_data="number:get:0")
+            ]]),
+        )
+        return
+
+    if len(data) >= 3 and data[1] == "operator":
+        try:
+            index = int(data[2])
+            operator = context.user_data["number_operators"][index]
+            country = context.user_data["number_operator_country_map"][operator]
+            service = context.user_data["number_selected_service"]
+        except (ValueError, IndexError, KeyError):
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
         if not await db.list_available_numbers(service=service, country=country):
             await q.message.reply_text(t(lang, "no_numbers"))
             return
         context.user_data["number_selected_country"] = country
         await q.message.reply_text(
-            t(lang, "confirm_get_number", country=html.escape(country)),
+            f"🌐 Country: <b>{html.escape(context.user_data.get('number_base_country', 'Afghanistan'))}</b>\n📶 Operator: <b>{html.escape(operator)}</b>\nPress the button below to get one number.",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton(t(lang, "get_number_button"), callback_data="number:get:0")
             ]]),
