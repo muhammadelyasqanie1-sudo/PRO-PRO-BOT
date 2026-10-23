@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 
 from .. import membership
 from ..i18n import LANGUAGE_NAMES, MENU_LOOKUP, t, t_all
-from ..keyboards import join_keyboard, language_keyboard, menu_keyboard, url_keyboard
+from ..keyboards import join_keyboard, language_keyboard, menu_keyboard, url_keyboard, wallet_keyboard
 from ..utils import get_db, is_admin
 from . import admin as admin_handlers
 
@@ -161,7 +161,14 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         history_text = "\n".join(lines) if lines else "No Buy Coin transactions yet / هنوز تراکنش بای‌کوین ندارید."
         await msg.reply_text(
             t(lang, "points", points=row.get("points", 0)) +
-            "\n\n📜 Recent history / تاریخچهٔ اخیر:\n" + history_text
+            "\n\n📜 Recent history / تاریخچهٔ اخیر:\n" + history_text +
+            "\n\n👇 <b>Choose an action / یک گزینه را انتخاب کنید</b>",
+            reply_markup=wallet_keyboard(lang),
+        )
+    elif key == "menu_wallet_back":
+        await msg.reply_text(
+            t(lang, "wallet_back_message"),
+            reply_markup=menu_keyboard(lang, await is_admin(context, user.id)),
         )
     elif key == "menu_daily_points":
         claimed, balance = await db.claim_daily_points(user.id, 15)
