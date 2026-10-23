@@ -21,7 +21,6 @@ from .config import Settings, load_settings
 from .db import Database
 from .guards import guard
 from .handlers import admin, router, user
-from .otp_api import poll_augestel
 from .miniapp import start_web_server
 
 log = logging.getLogger("bot")
@@ -38,8 +37,6 @@ async def _post_init(app: Application) -> None:
     )
     me = await app.bot.get_me()
     log.info("Started as @%s (db: %s)", me.username, settings.db_path)
-    # Poller checks managed API keys from the admin panel and optional env fallback.
-    app.create_task(poll_augestel(app), name="augestel-otp-poller")
     # The Mini App and Telegram bot share the same database and process.
     app.bot_data["miniapp_runner"] = await start_web_server(app)
 
