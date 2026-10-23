@@ -190,6 +190,43 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 t(lang, "choose_number_service"),
                 reply_markup=_number_choice_keyboard(services, "service", 0),
             )
+    elif key == "menu_sessions":
+        assigned = await db._all(
+            "SELECT id, service, country, number, created_at FROM phone_numbers "
+            "WHERE assigned_user_id=? AND status='assigned' ORDER BY id DESC LIMIT 10",
+            (user.id,),
+        )
+        if not assigned:
+            await msg.reply_text(t(lang, "sessions_empty"))
+            return
+        # Only show OTP records for numbers assigned to this Telegram user.
+        recent_otps = await db._all(
+            "SELECT number, message, received_at FROM otp_messages ORDER BY received_at DESC LIMIT 300"
+        )
+        def _digits(value: str) -> str:
+            return "".join(ch for ch in str(value or "") if ch.isdigit())
+        otp_by_number = {}
+        assigned_digits = {_digits(item["number"]) for item in assigned}
+        for otp in recent_otps:
+            digits = _digits(otp.get("number", ""))
+            if digits in assigned_digits and digits not in otp_by_number:
+                otp_by_number[digits] = otp
+        blocks = [t(lang, "sessions_title")]
+        for item in assigned:
+            otp = otp_by_number.get(_digits(item["number"]))
+            if otp:
+                otp_line = "🔐 Latest OTP: " + html.escape(str(otp["message"])[:500]) + "\n🕒 " + html.escape(str(otp["received_at"]))
+            else:
+                otp_line = "⏳ Waiting for OTP / منتظر کد تأیید"
+            blocks.append(t(
+                lang, "session_item",
+                service=html.escape(str(item["service"])),
+                country=html.escape(str(item["country"])),
+                number=html.escape(str(item["number"])),
+                created=html.escape(str(item["created_at"])[:16].replace("T", " ")),
+                otp_line=otp_line,
+            ))
+        await msg.reply_text("\n\n".join(blocks))
     elif key == "menu_language":
         await msg.reply_text(t(lang, "choose_lang"), reply_markup=language_keyboard("lang"))
     elif key == "menu_admin":
