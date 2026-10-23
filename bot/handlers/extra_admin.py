@@ -125,13 +125,13 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
             await msg.reply_text("That API key is already saved. Send a different key or /cancel.")
             return
         context.user_data.pop("state", None)
-        context.user_data.pop("state", None)
         await msg.reply_text(
             "✅ API key saved and activated.\n\n"
             "Provider inventory sync is not triggered automatically for generic API keys. "
             "Configure the matching provider integration before importing numbers.",
             reply_markup=back_keyboard(),
         )
+        return
 
     if state in ("points_add", "points_sub"):
         target_text, sep, amount_text = text.partition("|")
