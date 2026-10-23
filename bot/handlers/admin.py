@@ -256,13 +256,23 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif action == "num_service":
         service = arg
         context.user_data["num_add"] = {"service": service}
-        countries = list(dict.fromkeys(NUMBER_COUNTRIES + [v.strip() for v in (await db.get_setting("custom_countries")).split("\n") if v.strip()]))
+        custom_countries = [v.strip() for v in (await db.get_setting("custom_countries")).split("\n") if v.strip()]
+        stock_countries = [
+            str(item["country"]) for item in await db._all(
+                "SELECT DISTINCT country FROM phone_numbers WHERE service=? ORDER BY country COLLATE NOCASE",
+                (service,),
+            )
+        ]
+        countries = list(dict.fromkeys(stock_countries + custom_countries))
         rows = []
         for i in range(0, len(countries), 2):
-            rows.append([InlineKeyboardButton(name, callback_data=f"adm:num_country:{name}") for name in countries[i:i + 2]])
+            rows.append([InlineKeyboardButton(name[:60], callback_data=f"adm:num_country:{name}") for name in countries[i:i + 2]])
         rows.append([InlineKeyboardButton("➕ Add country / افزودن کشور", callback_data="adm:country_add")])
         rows.append([InlineKeyboardButton("⬅️ Admin panel / پنل مدیریت", callback_data="adm:home")])
-        await _edit(q, f"📱 <b>Service / سرویس:</b> {esc(service)}\nChoose country / کشور را انتخاب کنید:", InlineKeyboardMarkup(rows))
+        prompt = "Choose an existing country or add a new one / کشور موجود را انتخاب کنید یا کشور جدید اضافه کنید:"
+        if not countries:
+            prompt = "No countries configured for this service yet. Add a country first / هنوز کشوری برای این سرویس ثبت نشده؛ ابتدا کشور اضافه کنید."
+        await _edit(q, f"📱 <b>Service / سرویس:</b> {esc(service)}\n{prompt}", InlineKeyboardMarkup(rows))
 
     elif action in ("service_add", "country_add"):
         context.user_data["state"] = action
