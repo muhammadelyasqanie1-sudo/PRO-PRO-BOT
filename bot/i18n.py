@@ -9,7 +9,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "choose_lang": "Please choose your language:",
         "lang_changed": "✅ Language updated.",
-        "welcome": "✨ <b>PRO • PRO PREMIUM</b> ✨\\n━━━━━━━━━━━━━━━━━━\\n👋 Welcome, <b>{name}</b>!\\n\\n📲 <b>Virtual Number Center</b>\\n🌍 Explore services and available countries.\\n⚡ Request up to two numbers when stock is available.\\n🔐 OTP messages appear here when supported by the provider.\\n\\n👇 <b>Choose an option from the premium menu below</b>",
+        "welcome": "✨ <b>PRO • PRO PREMIUM</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Welcome, <b>{name}</b>!\n\n📲 <b>Virtual Number Center</b>\n🌍 Explore services and available countries.\n⚡ Request up to two numbers when stock is available.\n🔐 OTP messages appear here when supported by the provider.\n\n👇 <b>Choose an option from the premium menu below</b>",
         "menu_profile": "👤 Profile",
         "menu_invite": "🎁 Invite friends",
         "menu_support": "💬 Support",
@@ -69,7 +69,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "dr": {
         "choose_lang": "لطفاً زبان خود را انتخاب کنید:",
         "lang_changed": "✅ زبان تغییر کرد.",
-        "welcome": "✨ <b>PRO • PRO پریمیوم</b> ✨\\n━━━━━━━━━━━━━━━━━━\\n👋 خوش آمدید، <b>{name}</b>!\\n\\n📲 <b>مرکز شماره‌های مجازی</b>\\n🌍 سرویس‌ها و کشورهای دارای شماره را ببینید.\\n⚡ در صورت موجود بودن، تا دو شماره درخواست کنید.\\n🔐 کدهای تأیید در صورت پشتیبانی ارائه‌دهنده همین‌جا نمایش داده می‌شوند.\\n\\n👇 <b>یکی از گزینه‌های منوی ویژه را انتخاب کنید</b>",
+        "welcome": "✨ <b>PRO • PRO پریمیوم</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 خوش آمدید، <b>{name}</b>!\n\n📲 <b>مرکز شماره‌های مجازی</b>\n🌍 سرویس‌ها و کشورهای دارای شماره را ببینید.\n⚡ در صورت موجود بودن، تا دو شماره درخواست کنید.\n🔐 کدهای تأیید در صورت پشتیبانی ارائه‌دهنده همین‌جا نمایش داده می‌شوند.\n\n👇 <b>یکی از گزینه‌های منوی ویژه را انتخاب کنید</b>",
         "menu_profile": "👤 پروفایل",
         "menu_invite": "🎁 دعوت دوستان",
         "menu_support": "💬 پشتیبانی",
