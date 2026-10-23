@@ -37,9 +37,6 @@ PROMPTS = {
 CANCEL_HINT = "\n\nSend /cancel to abort."
 
 
-NUMBER_COUNTRIES = ["Afghanistan", "United States", "United Kingdom", "Canada", "Germany", "France", "India", "Pakistan", "Turkey", "Russia", "Indonesia", "Brazil", "Nigeria", "Philippines", "Other"]
-
-
 def _number_service_keyboard(services: list[str]) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(s, callback_data=f"adm:num_service:{s}")] for s in services]
     rows.append([InlineKeyboardButton("➕ Add service", callback_data="adm:service_add")])
