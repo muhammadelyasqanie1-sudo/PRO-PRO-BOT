@@ -114,6 +114,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "get_number_button": "📲 دریافت شماره",
         "number_cooldown": "⏳ لطفاً برای درخواست شمارهٔ بعدی {seconds} ثانیه صبر کنید.",
         "number_added": "شماره برای شما ثبت شد:\nسرویس: <b>{service}</b>\nکشور: <b>{country}</b>\nشماره: <code>{number}</code>\n\nمنتظر کد تأیید از ارائه‌دهنده باشید؛ پس از دریافت، همین‌جا فرستاده می‌شود.",
+        "sessions_title": "📋 <b>شماره‌های شما و کدهای تأیید اخیر</b>",
+        "sessions_empty": "هنوز شماره‌ای به شما اختصاص نیافته است. برای شروع روی 📱 دریافت شماره بزنید.",
+        "session_item": "📱 <b>{service}</b> · {country}\nشماره: <code>{number}</code>\nتاریخ دریافت: {created}\n{otp_line}",
     },
 }
 
