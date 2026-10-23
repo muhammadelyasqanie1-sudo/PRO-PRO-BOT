@@ -215,7 +215,7 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         for item in assigned:
             otp = otp_by_number.get(_digits(item["number"]))
             if otp:
-                otp_line = "🔐 Latest OTP: " + html.escape(str(otp["message"])[:500]) + "\n🕒 " + html.escape(str(otp["received_at"]))
+                otp_line = "🔐 Latest OTP: " + html.escape(str(otp["message"])[:250]) + "\n🕒 " + html.escape(str(otp["received_at"]))
             else:
                 otp_line = "⏳ Waiting for OTP / منتظر کد تأیید"
             blocks.append(t(
