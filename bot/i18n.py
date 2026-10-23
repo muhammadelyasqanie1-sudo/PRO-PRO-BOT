@@ -58,6 +58,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "get_number_button": "📲 Get number",
         "number_cooldown": "⏳ Please wait {seconds} second(s) before requesting another number.",
         "number_added": "Number added to your session:\nService: <b>{service}</b>\nCountry: <b>{country}</b>\nNumber: <code>{number}</code>\n\nWaiting for the OTP from the provider. It will be sent here when received.",
+        "sessions_title": "📋 <b>Your numbers & recent OTPs</b>",
+        "sessions_empty": "You have no assigned numbers yet. Choose 📱 Get number to start.",
+        "session_item": "📱 <b>{service}</b> · {country}\nNumber: <code>{number}</code>\nAssigned: {created}\n{otp_line}",
     },
     "dr": {
         "choose_lang": "لطفاً زبان خود را انتخاب کنید:",
