@@ -10,13 +10,26 @@ def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
     rows = [
         [t(lang, "menu_numbers"), t(lang, "menu_sessions")],
         [t(lang, "menu_profile"), t(lang, "menu_points")],
-        [t(lang, "menu_invite"), t(lang, "menu_send_points")],
-        [t(lang, "menu_daily_points"), t(lang, "menu_support")],
-        [t(lang, "menu_about"), t(lang, "menu_language")],
+        [t(lang, "menu_support"), t(lang, "menu_about")],
+        [t(lang, "menu_language")],
     ]
     if admin:
         rows.append([t(lang, "menu_admin")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
+
+
+def wallet_keyboard(lang: str | None) -> ReplyKeyboardMarkup:
+    """Keep all Buy Coin actions together, with a clear way back."""
+    return ReplyKeyboardMarkup(
+        [
+            [t(lang, "menu_send_points")],
+            [t(lang, "menu_invite")],
+            [t(lang, "menu_daily_points")],
+            [t(lang, "menu_wallet_back")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 
 def language_keyboard(prefix: str) -> InlineKeyboardMarkup:
