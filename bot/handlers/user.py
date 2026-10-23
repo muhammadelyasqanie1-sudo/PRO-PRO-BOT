@@ -128,6 +128,7 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await msg.reply_text(
             t(lang, "invite", link=link, referrals=row["referrals"], points=row.get("points", 0)),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
+            reply_markup=wallet_keyboard(lang),
         )
     elif key in ("menu_support", "menu_about"):
         setting = "support_link" if key == "menu_support" else "official_link"
@@ -173,12 +174,18 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     elif key == "menu_daily_points":
         claimed, balance = await db.claim_daily_points(user.id, 15)
         if claimed:
-            await msg.reply_text(f"🎉 +15 Buy Coin! Balance: {balance} / ۱۵ بای‌کوین روزانه دریافت شد")
+            await msg.reply_text(
+                t(lang, "daily_claim_success", balance=balance),
+                reply_markup=wallet_keyboard(lang),
+            )
         else:
-            await msg.reply_text(f"⏳ Daily Buy Coin already claimed. Balance: {balance} / بای‌کوین امروز را قبلاً گرفته‌اید")
+            await msg.reply_text(
+                t(lang, "daily_claim_used", balance=balance),
+                reply_markup=wallet_keyboard(lang),
+            )
     elif key == "menu_send_points":
         context.user_data["state"] = "points_transfer_target"
-        await msg.reply_text(t(lang, "send_points_prompt"))
+        await msg.reply_text(t(lang, "send_points_prompt"), reply_markup=wallet_keyboard(lang))
     elif key == "menu_numbers":
         active_services = await db.list_active_services()
         numbers = await db.list_available_numbers(services=active_services)
