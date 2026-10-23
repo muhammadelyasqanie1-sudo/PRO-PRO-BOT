@@ -44,15 +44,6 @@ def _number_service_keyboard(services: list[str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-def _number_country_keyboard() -> InlineKeyboardMarkup:
-    rows = []
-    for i in range(0, len(NUMBER_COUNTRIES), 2):
-        pair = NUMBER_COUNTRIES[i:i + 2]
-        rows.append([InlineKeyboardButton(c, callback_data=f"adm:num_country:{c}") for c in pair])
-    rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
-    return InlineKeyboardMarkup(rows)
-
-
 # ---------------------------------------------------------------- panel
 async def _render_panel(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     db = get_db(context)
