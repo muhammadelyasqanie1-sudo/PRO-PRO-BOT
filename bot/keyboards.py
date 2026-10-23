@@ -8,11 +8,11 @@ from .i18n import LANGUAGE_NAMES, t
 def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
     # Compact premium dashboard: paired actions, clear visual grouping, consistent emoji.
     rows = [
-        [t(lang, "menu_numbers"), t(lang, "menu_profile")],
-        [t(lang, "menu_points"), t(lang, "menu_send_points")],
-        [t(lang, "menu_daily_points"), t(lang, "menu_invite")],
-        [t(lang, "menu_support"), t(lang, "menu_about")],
-        [t(lang, "menu_language")],
+        [t(lang, "menu_numbers"), t(lang, "menu_sessions")],
+        [t(lang, "menu_profile"), t(lang, "menu_points")],
+        [t(lang, "menu_invite"), t(lang, "menu_send_points")],
+        [t(lang, "menu_daily_points"), t(lang, "menu_support")],
+        [t(lang, "menu_about"), t(lang, "menu_language")],
     ]
     if admin:
         rows.append([t(lang, "menu_admin")])
