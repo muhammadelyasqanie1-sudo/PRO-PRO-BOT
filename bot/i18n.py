@@ -16,6 +16,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_about": "📢 Official channel",
         "menu_language": "🌐 Language",
         "menu_numbers": "📱 Get number",
+        "menu_sessions": "📋 My numbers & OTP",
         "menu_points": "🪙 Buy Coin wallet",
         "menu_send_points": "🔁 Transfer Buy Coin",
         "menu_daily_points": "🎁 Daily Buy Coin",
