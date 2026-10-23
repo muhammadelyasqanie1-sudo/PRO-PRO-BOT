@@ -201,7 +201,7 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             return
         # Only show OTP records for numbers assigned to this Telegram user.
         recent_otps = await db._all(
-            "SELECT number, message, received_at FROM otp_messages ORDER BY received_at DESC LIMIT 300"
+            "SELECT number, message, received_at FROM otp_messages ORDER BY received_at DESC LIMIT 100"
         )
         def _digits(value: str) -> str:
             return "".join(ch for ch in str(value or "") if ch.isdigit())
