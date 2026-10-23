@@ -75,6 +75,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_numbers": "📱 دریافت شماره",
         "menu_sessions": "📋 شماره‌های من و OTP",
         "menu_points": "🪙 کیف پول بای‌کوین",
+        "menu_wallet_back": "⬅️ منوی اصلی",
         "menu_send_points": "🔁 انتقال بای‌کوین",
         "menu_daily_points": "🎁 بای‌کوین روزانه",
         "menu_admin": "⚙️ پنل مدیریت",
