@@ -12,7 +12,6 @@ from telegram.ext import ContextTypes
 
 from ..keyboards import admin_panel_keyboard, back_keyboard, confirm_broadcast_keyboard
 from ..utils import get_db, get_settings, is_admin, is_owner, valid_url
-from ..otp_api import sync_augestel_numbers
 
 from . import extra_admin
 
@@ -188,23 +187,20 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _edit(q, ("✅ Activated: " if enabled else "⚪ Deactivated: ") + esc(service_name) + "\n\n🧩 <b>Service visibility</b>", InlineKeyboardMarkup(rows))
 
     elif action == "provider_sync":
-        try:
-            result = await sync_augestel_numbers(db)
-        except Exception as exc:
-            log.warning("Augestel inventory sync failed (%s).", type(exc).__name__)
-            error_text = str(exc) if isinstance(exc, RuntimeError) and str(exc).startswith("Please wait") else "⚠️ Augestel sync failed. Check the API key and provider API status, then try again."
-            await _edit(q, esc(error_text), InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Retry sync", callback_data="adm:provider_sync")],[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
-            return
-        await _edit(q, f"✅ <b>Provider inventory sync complete</b>\nPages read: <b>{result['pages_read']}</b>\nNew numbers made available: <b>{result['added']}</b>\nDuplicates skipped: <b>{result['duplicates']}</b>\nRecords read: <b>{result['received']}</b>\n\nImported provider numbers remain pending until an administrator approves each number for one specific service. Each number can be assigned to only one user.", InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage number stock", callback_data="adm:num_stock")],[InlineKeyboardButton("🔄 Sync again", callback_data="adm:provider_sync")],[InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]))
+        await _edit(
+            q,
+            "KSI IPRN API key is configured in Railway. Provider synchronization is being migrated to KSI; no inventory was fetched by this button yet.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("📥 Review pending", callback_data="adm:provider_pending")], [InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")]]),
+        )
 
     elif action == "provider_pending":
         pending = await db.list_pending_provider_numbers(20)
         rows = [[InlineKeyboardButton(f"#{n['id']} · {n['number']} · {n['country']}"[:60], callback_data=f"adm:provider_review:{n['id']}")] for n in pending]
-        rows.append([InlineKeyboardButton("🔄 Sync Augestel page", callback_data="adm:provider_sync")])
+        rows.append([InlineKeyboardButton("🔄 Provider sync", callback_data="adm:provider_sync")])
         rows.append([InlineKeyboardButton("⬅️ Admin panel", callback_data="adm:home")])
         text = "📥 <b>Numbers awaiting approval</b>\nChoose a number, then assign it to an active service."
         if not pending:
-            text = "📥 <b>No numbers awaiting approval.</b>\nUse Sync Augestel page to fetch inventory."
+            text = "📥 <b>No numbers awaiting approval.</b>\nProvider sync is being migrated to KSI."
         await _edit(q, text, InlineKeyboardMarkup(rows))
 
     elif action == "provider_review":
