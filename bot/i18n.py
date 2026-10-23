@@ -127,6 +127,7 @@ MENU_KEYS = (
     "menu_about",
     "menu_language",
     "menu_numbers",
+    "menu_sessions",
     "menu_points",
     "menu_send_points",
     "menu_daily_points",
