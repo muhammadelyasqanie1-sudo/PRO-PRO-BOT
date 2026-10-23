@@ -193,7 +193,7 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     elif key == "menu_sessions":
         assigned = await db._all(
             "SELECT id, service, country, number, created_at FROM phone_numbers "
-            "WHERE assigned_user_id=? AND status='assigned' ORDER BY id DESC LIMIT 10",
+            "WHERE assigned_user_id=? AND status='assigned' ORDER BY id DESC LIMIT 6",
             (user.id,),
         )
         if not assigned:
