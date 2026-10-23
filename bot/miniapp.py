@@ -392,14 +392,14 @@ async def admin_toggle_service(request: web.Request) -> web.Response:
     return _json({"ok": True, "service": canonical, "active": active})
 
 
-async def augestel_webhook(request: web.Request) -> web.Response:
-    """Receive Augestel webhook events and relay verified delivered SMS messages."""
-    secret = os.getenv("AUGESTEL_WEBHOOK_SECRET", "").strip()
+async def ksi_webhook(request: web.Request) -> web.Response:
+    """Receive signed KSI IPRN events and relay delivered SMS messages."""
+    secret = os.getenv("KSI_WEBHOOK_SECRET", "").strip()
     if not secret:
         return _json({"ok": False, "error": "Webhook secret is not configured."}, 503)
 
     raw_body = await request.read()
-    signature = request.headers.get("X-Augestel-Signature", "").strip()
+    signature = request.headers.get("X-KSIIPRNTECHNOLOGY-Signature", "").strip()
     expected = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
     if not signature or not hmac.compare_digest(expected, signature):
         return _json({"ok": False, "error": "Invalid webhook signature."}, 401)
@@ -411,27 +411,24 @@ async def augestel_webhook(request: web.Request) -> web.Response:
     if not isinstance(payload, dict):
         return _json({"ok": False, "error": "Invalid event payload."}, 400)
 
-    event = str(payload.get("event") or request.headers.get("X-Augestel-Event", "")).strip()
-    data = payload.get("data")
+    event = str(payload.get("event") or request.headers.get("X-KSIIPRNTECHNOLOGY-Event", "")).strip()
+    data = payload.get("data", payload)
     if not isinstance(data, dict):
         return _json({"ok": False, "error": "Missing event data."}, 400)
-
-    # Other event types are acknowledged so Augestel does not retry events this
-    # receiver does not currently need to process.
     if event != "message.received":
-        log.info("Acknowledged Augestel webhook event: %s", event[:60])
+        log.info("Acknowledged KSI webhook event: %s", event[:60])
         return _json({"ok": True, "event": event})
 
-    number = str(data.get("number") or "").strip()
-    message = str(data.get("message") or "").strip()
+    number = str(data.get("number") or data.get("phone_number") or "").strip()
+    message = str(data.get("message") or data.get("text") or "").strip()
     status = str(data.get("status") or "").strip().lower()
     if not number or not message:
         return _json({"ok": False, "error": "Message event is missing number or message."}, 400)
-    if status and status != "delivered":
+    if status and status not in ("delivered", "received", "success", "successful"):
         return _json({"ok": True, "ignored": "message was not delivered"})
 
     received = str(data.get("received_at") or payload.get("timestamp") or "")
-    source = str(data.get("source") or "SMS")
+    source = str(data.get("source") or data.get("type") or "SMS")
     raw_id = str(data.get("id") or data.get("message_id") or "")
     dedupe = raw_id or hashlib.sha256(
         f"{number}|{received}|{source}|{message}".encode("utf-8")
@@ -456,9 +453,9 @@ async def augestel_webhook(request: web.Request) -> web.Response:
 
     if assigned:
         import re
-        match = re.search(r"(?<!\d)(\d{3}-\d{3}|\d{4,8})(?!\d)", message)
+        match = re.search(r"(?<!\\d)(\\d{3}-\\d{3}|\\d{4,8})(?!\\d)", message)
         code = match.group(1) if match else "not detected"
-        country = str(data.get("country") or data.get("country_name") or "N/A")
+        country = str(data.get("country") or data.get("country_name") or data.get("range_name") or "N/A")
         values = {
             "{language}": "English / دری",
             "{service}": source,
@@ -470,7 +467,7 @@ async def augestel_webhook(request: web.Request) -> web.Response:
         }
         template = await db.get_setting(
             "otp_template",
-            "🔐 <b>NUM BOT</b>\n📱 {service}\n🌍 {country}\n📞 <code>{number}</code>\n🔢 Code: <code>{code}</code>\n🕒 {time}\n🗣 {language}\n<pre>{message}</pre>",
+            "🔐 <b>PRO+PRO</b>\\n📱 {service}\\n🌍 {country}\\n📞 <code>{number}</code>\\n🔢 Code: <code>{code}</code>\\n🕒 {time}\\n🗣 {language}\\n<pre>{message}</pre>",
         )
         import html
         text_message = template
@@ -480,17 +477,16 @@ async def augestel_webhook(request: web.Request) -> web.Response:
             try:
                 await telegram_app.bot.send_message(chat_id=uid, text=text_message)
             except Exception as exc:
-                log.warning("Could not deliver webhook OTP to user %s (%s).", uid, type(exc).__name__)
+                log.warning("Could not deliver KSI webhook OTP to user %s (%s).", uid, type(exc).__name__)
 
         channel_id = os.getenv("OTP_CHANNEL_ID", "").strip()
         if channel_id:
             try:
                 await telegram_app.bot.send_message(chat_id=int(channel_id), text=text_message)
             except Exception as exc:
-                log.warning("Could not post webhook OTP to channel (%s).", type(exc).__name__)
+                log.warning("Could not post KSI webhook OTP to channel (%s).", type(exc).__name__)
 
     return _json({"ok": True, "event": event, "relayed": bool(assigned)})
-
 
 async def start_web_server(telegram_app) -> web.AppRunner | None:
     """Start the Mini App server on Railway's PORT (or WEB_PORT locally)."""
@@ -504,7 +500,7 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server["telegram_app"] = telegram_app
     server.router.add_get("/", index)
     server.router.add_get("/health", health)
-    server.router.add_post("/webhooks/augestel", augestel_webhook)
+    server.router.add_post("/webhooks/ksiiprn", ksi_webhook)
     server.router.add_get("/api/me", me)
     server.router.add_get("/api/catalog", catalog)
     server.router.add_get("/api/sessions", sessions)
