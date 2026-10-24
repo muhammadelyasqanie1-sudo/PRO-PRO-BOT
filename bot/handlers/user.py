@@ -10,9 +10,20 @@ from telegram.ext import ContextTypes
 
 from .. import membership
 from ..i18n import LANGUAGE_NAMES, MENU_LOOKUP, t, t_all
-from ..keyboards import join_keyboard, language_keyboard, menu_keyboard, url_keyboard, wallet_keyboard
+from ..keyboards import (
+    close_button,
+    ib,
+    join_keyboard,
+    language_keyboard,
+    menu_keyboard,
+    refer_keyboard,
+    url_keyboard,
+    wallet_keyboard,
+)
 from ..utils import get_db, is_admin
 from . import admin as admin_handlers
+
+REFER_REWARD = 10  # Buy Coin per valid invite (matches db referral bonus)
 
 
 async def _show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str) -> None:
@@ -123,11 +134,35 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 joined=row["joined_at"][:10],
             )
         )
-    elif key == "menu_invite":
+    elif key in ("menu_refer", "menu_invite"):
         link = f"https://t.me/{context.bot.username}?start={user.id}"
         await msg.reply_text(
-            t(lang, "invite", link=link, referrals=row["referrals"], points=row.get("points", 0)),
+            t(lang, "refer_card", link=link, referrals=row["referrals"], per=REFER_REWARD),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
+            reply_markup=refer_keyboard(lang, link),
+        )
+    elif key == "menu_traffic":
+        active_services = await db.list_active_services()
+        numbers = await db.list_available_numbers(services=active_services)
+        if not numbers:
+            await msg.reply_text(t(lang, "no_numbers"))
+            return
+        counts: dict[str, int] = {}
+        for n in numbers:
+            counts[n["service"]] = counts.get(n["service"], 0) + 1
+        if any(name.casefold() == "any service" for name in counts):
+            # Provider stock is shared by every active service.
+            lines = [f"📱 <b>{html.escape(str(s)).upper()}</b>" for s in active_services]
+        else:
+            lines = [f"📱 <b>{html.escape(str(s)).upper()}</b> — {c}" for s, c in counts.items()]
+        await msg.reply_text(
+            t(lang, "traffic_title") + "\n" + "\n".join(lines) + "\n" + t(lang, "traffic_footer", total=len(numbers))
+        )
+    elif key == "menu_2fa":
+        await msg.reply_text(t(lang, "twofa_soon"))
+    elif key == "menu_withdraw":
+        await msg.reply_text(
+            t(lang, "withdraw_note") + "\n\n" + t(lang, "points", points=row.get("points", 0)),
             reply_markup=wallet_keyboard(lang),
         )
     elif key in ("menu_support", "menu_about"):
@@ -204,7 +239,7 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 t(lang, "choose_number_service"),
                 reply_markup=_number_choice_keyboard(services, "service", 0),
             )
-    elif key == "menu_sessions":
+    elif key in ("menu_sessions", "menu_search"):
         assigned = await db._all(
             "SELECT id, service, country, number, created_at FROM phone_numbers "
             "WHERE assigned_user_id=? AND status='assigned' ORDER BY id DESC LIMIT 6",
@@ -252,22 +287,34 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 def _number_choice_keyboard(items: list[str], prefix: str, page: int = 0, page_size: int = 20) -> "InlineKeyboardMarkup":
     """Keep Telegram inline markup small even when provider inventory has many countries."""
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram import InlineKeyboardMarkup
 
     start = max(0, page) * page_size
     shown = items[start:start + page_size]
+    # One wide blue button per row; service names are shown in capitals (INSTAGRAM, FACEBOOK ...).
     rows = [
-        [InlineKeyboardButton(str(item)[:60], callback_data=f"number:{prefix}:{start + i}")]
+        [ib(str(item)[:60].upper() if prefix == "service" else str(item)[:60], "primary", callback_data=f"number:{prefix}:{start + i}")]
         for i, item in enumerate(shown)
     ]
     navigation = []
     if start > 0:
-        navigation.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"number:{prefix}_page:{page - 1}"))
+        navigation.append(ib("⬅️ Previous", "primary", callback_data=f"number:{prefix}_page:{page - 1}"))
     if start + page_size < len(items):
-        navigation.append(InlineKeyboardButton("Next ➡️", callback_data=f"number:{prefix}_page:{page + 1}"))
+        navigation.append(ib("Next ➡️", "primary", callback_data=f"number:{prefix}_page:{page + 1}"))
     if navigation:
         rows.append(navigation)
+    rows.append([close_button(label="Close")])
     return InlineKeyboardMarkup(rows)
+
+
+async def on_close(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Red Close / CLOSE button: remove the message the button is attached to."""
+    q = update.callback_query
+    await q.answer()
+    try:
+        await q.message.delete()
+    except TelegramError:
+        pass
 
 
 async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -371,7 +418,7 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await q.message.reply_text(
             t(lang, "confirm_get_number", country=html.escape(country)),
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(t(lang, "get_number_button"), callback_data="number:get:0")
+                ib(t(lang, "get_number_button"), "success", callback_data="number:get:0")
             ]]),
         )
         return
@@ -392,7 +439,7 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await q.message.reply_text(
             f"🌐 Country: <b>{html.escape(context.user_data.get('number_base_country', 'Afghanistan'))}</b>\n📶 Operator: <b>{html.escape(operator)}</b>\nPress the button below to get one number.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(t(lang, "get_number_button"), callback_data="number:get:0")
+                ib(t(lang, "get_number_button"), "success", callback_data="number:get:0")
             ]]),
         )
         return
@@ -437,16 +484,16 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         number=html.escape(item["number"]))
                 )
             buttons = [
-                [InlineKeyboardButton(f"📋 Copy number {index} / کاپی شماره {index}", copy_text=CopyTextButton(text=item["number"]))]
+                [ib(f"📋 Copy number {index} / کاپی شماره {index}", "success", copy_text=CopyTextButton(text=item["number"]))]
                 for index, item in enumerate(assigned, 1)
             ]
             buttons.extend([
-                [InlineKeyboardButton("🔄 Get another pair / شماره‌های جدید", callback_data="number:get:0")],
-                [InlineKeyboardButton("⬅️ Back to services / برگشت به سرویس‌ها", callback_data="number:back:services")],
+                [ib("🔄 Get another pair / شماره‌های جدید", "primary", callback_data="number:get:0")],
+                [ib("⬅️ Back to services / برگشت به سرویس‌ها", "danger", callback_data="number:back:services")],
             ])
             otp_link = (await db.get_setting("otp_channel_link")).strip()
             if otp_link.startswith("https://t.me/"):
-                buttons.insert(1, [InlineKeyboardButton("📢 OTP Channel / کانال کدها", url=otp_link)])
+                buttons.insert(1, [ib("📢 OTP Channel / کانال کدها", "primary", url=otp_link)])
             markup = InlineKeyboardMarkup(buttons)
             if len(assigned) == 1:
                 await q.message.reply_text("\n\n".join(blocks) + "\n\n⚠️ Only one number is available in this selection right now.", reply_markup=markup)

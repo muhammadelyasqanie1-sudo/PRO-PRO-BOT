@@ -1,20 +1,46 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+import os
+
+from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
 from .i18n import LANGUAGE_NAMES, t
 
+# Telegram (Bot API 9.4+) can colour buttons: "primary" = blue, "success" = green,
+# "danger" = red. Set BUTTON_STYLES=0 in the environment to switch colours off.
+BUTTON_STYLES = os.getenv("BUTTON_STYLES", "1").strip().lower() not in ("0", "false", "no", "off")
+
+CLOSE_CALLBACK = "ui:close"
+
+
+def _extra(style: str | None) -> dict | None:
+    return {"style": style} if (style and BUTTON_STYLES) else None
+
+
+def kb(text: str, style: str | None = None) -> KeyboardButton:
+    """Reply-keyboard button, optionally coloured."""
+    return KeyboardButton(text, api_kwargs=_extra(style))
+
+
+def ib(text: str, style: str | None = None, **kwargs) -> InlineKeyboardButton:
+    """Inline button, optionally coloured."""
+    return InlineKeyboardButton(text, api_kwargs=_extra(style), **kwargs)
+
+
+def close_button(lang: str | None = None, label: str | None = None) -> InlineKeyboardButton:
+    return ib(f"❌ {label or t(lang, 'close')}", "danger", callback_data=CLOSE_CALLBACK)
+
 
 def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
-    # Compact premium dashboard: paired actions, clear visual grouping, consistent emoji.
+    # Main dashboard: blue / green / red buttons in two columns.
     rows = [
-        [t(lang, "menu_numbers"), t(lang, "menu_sessions")],
-        [t(lang, "menu_profile"), t(lang, "menu_points")],
-        [t(lang, "menu_support"), t(lang, "menu_about")],
-        [t(lang, "menu_language")],
+        [kb(t(lang, "menu_numbers"), "primary"), kb(t(lang, "menu_search"), "primary")],
+        [kb(t(lang, "menu_traffic"), "success"), kb(t(lang, "menu_2fa"), "primary")],
+        [kb(t(lang, "menu_refer"), "success"), kb(t(lang, "menu_withdraw"), "danger")],
+        [kb(t(lang, "menu_support"), "primary")],
     ]
     if admin:
-        rows.append([t(lang, "menu_admin")])
+        rows.append([kb(t(lang, "menu_admin"), "danger")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 
@@ -22,37 +48,59 @@ def wallet_keyboard(lang: str | None) -> ReplyKeyboardMarkup:
     """Keep all Buy Coin actions together, with a clear way back."""
     return ReplyKeyboardMarkup(
         [
-            [t(lang, "menu_send_points")],
-            [t(lang, "menu_invite")],
-            [t(lang, "menu_daily_points")],
-            [t(lang, "menu_wallet_back")],
+            [kb(t(lang, "menu_send_points"), "primary")],
+            [kb(t(lang, "menu_invite"), "success")],
+            [kb(t(lang, "menu_daily_points"), "success")],
+            [kb(t(lang, "menu_wallet_back"), "danger")],
         ],
         resize_keyboard=True,
         is_persistent=True,
     )
 
 
+def refer_keyboard(lang: str | None, link: str) -> InlineKeyboardMarkup:
+    """Refer & Earn card: copy-link (green) and close (red)."""
+    return InlineKeyboardMarkup(
+        [
+            [ib(f"📋 {t(lang, 'copy_link')}", "success", copy_text=CopyTextButton(text=link))],
+            [close_button(lang, t(lang, "close"))],
+        ]
+    )
+
+
 def language_keyboard(prefix: str) -> InlineKeyboardMarkup:
     """prefix is 'setlang' (first run) or 'lang' (change later)."""
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton(name, callback_data=f"{prefix}:{code}") for code, name in LANGUAGE_NAMES.items()]]
+        [[ib(name, "primary", callback_data=f"{prefix}:{code}") for code, name in LANGUAGE_NAMES.items()]]
     )
 
 
 def join_keyboard(lang: str | None, channels: list[dict], bilingual: bool = False) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(f"📢 {c['title']}", url=c["link"])] for c in channels if c.get("link")]
+    rows = [[ib(f"📢 {c['title']}", "primary", url=c["link"])] for c in channels if c.get("link")]
     label = f"{t('en', 'verify')} / {t('dr', 'verify')}" if bilingual else t(lang, "verify")
-    rows.append([InlineKeyboardButton(label, callback_data="verify_join")])
+    rows.append([ib(label, "success", callback_data="verify_join")])
     return InlineKeyboardMarkup(rows)
 
 
 def url_keyboard(lang: str | None, url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(t(lang, "open_link"), url=url)]])
+    return InlineKeyboardMarkup([[ib(t(lang, "open_link"), "primary", url=url)]])
 
 
 # ---------------- bilingual admin panel ----------------
+# Button colours by callback: green = positive, red = destructive / closing, blue = everything else.
+_ADMIN_STYLES = {
+    "adm:stats": "success",
+    "adm:unban": "success",
+    "adm:bc_yes": "success",
+    "adm:ban": "danger",
+    "adm:bc_no": "danger",
+    "adm:maint": "danger",
+    "adm:close": "danger",
+}
+
+
 def _btn(text: str, data: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text, callback_data=data)
+    return ib(text, _ADMIN_STYLES.get(data, "primary"), callback_data=data)
 
 
 def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMarkup:
