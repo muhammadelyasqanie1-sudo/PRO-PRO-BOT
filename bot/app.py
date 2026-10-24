@@ -102,6 +102,7 @@ def build_application(settings: Settings) -> Application:
     app.add_handler(CallbackQueryHandler(user.on_set_language, pattern=r"^(setlang|lang):"))
     app.add_handler(CallbackQueryHandler(admin.on_callback, pattern=r"^adm:"))
     app.add_handler(CallbackQueryHandler(user.on_number_request, pattern=r"^number:"))
+    app.add_handler(CallbackQueryHandler(user.on_close, pattern=r"^ui:close$"))
 
     app.add_handler(
         MessageHandler(private & filters.UpdateType.MESSAGE & ~filters.COMMAND, router.on_message)
