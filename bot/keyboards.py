@@ -33,11 +33,12 @@ def close_button(lang: str | None = None, label: str | None = None) -> InlineKey
 
 def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
     # Main dashboard: blue / green / red buttons in two columns.
+    # Compact dashboard: related actions stay together in short two-button rows.
     rows = [
         [kb(t(lang, "menu_numbers"), "primary"), kb(t(lang, "menu_search"), "primary")],
-        [kb(t(lang, "menu_traffic"), "success"), kb(t(lang, "menu_2fa"), "primary")],
-        [kb(t(lang, "menu_refer"), "success"), kb(t(lang, "menu_withdraw"), "danger")],
-        [kb(t(lang, "menu_support"), "primary")],
+        [kb(t(lang, "menu_points"), "success"), kb(t(lang, "menu_refer"), "success")],
+        [kb(t(lang, "menu_traffic"), "primary"), kb(t(lang, "menu_withdraw"), "danger")],
+        [kb(t(lang, "menu_support"), "primary"), kb(t(lang, "menu_language"), "primary")],
     ]
     if admin:
         rows.append([kb(t(lang, "menu_admin"), "danger")])
@@ -107,22 +108,19 @@ def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMar
     # English / Dari labels are shown together so admins can operate the panel
     # regardless of the language selected for their public bot account.
     rows = [
-        [_btn("📊 Stats / آمار", "adm:stats"), _btn("📣 Broadcast / پیام همگانی", "adm:broadcast")],
-        [_btn("🔎 User info / معلومات کاربر", "adm:user_info")],
-        [_btn("🚫 Ban / مسدود", "adm:ban"), _btn("✅ Unban / رفع مسدودی", "adm:unban")],
-        [_btn("📢 Force join / عضویت اجباری", "adm:channels")],
-        [_btn("📱 Manage numbers / مدیریت شماره‌ها", "adm:num_stock")],
-        [_btn("🧩 Services / سرویس‌ها", "adm:services"), _btn("🌍 Countries / کشورها", "adm:countries")],
-        [_btn("📥 Provider review / بررسی شماره‌ها", "adm:provider_pending")],
+        [_btn("📊 Stats", "adm:stats"), _btn("📣 Broadcast", "adm:broadcast")],
+        [_btn("🔎 User info", "adm:user_info"), _btn("📢 Force join", "adm:channels")],
+        [_btn("🚫 Ban", "adm:ban"), _btn("✅ Unban", "adm:unban")],
+        [_btn("📱 Numbers", "adm:num_stock"), _btn("🧩 Services", "adm:services")],
+        [_btn("🌍 Countries", "adm:countries"), _btn("📥 Provider review", "adm:provider_pending")],
     ]
     if is_owner:
-        rows.append([_btn("🔑 API keys / کلیدهای API", "adm:api_keys"), _btn("⭐ Points / امتیازها", "adm:points")])
-        rows.append([_btn("📝 OTP message / متن OTP", "adm:otp_template"), _btn("🔘 OTP buttons / دکمه‌های OTP", "adm:otp_buttons")])
-        rows.append([_btn("👮 Admins / مدیران", "adm:admins")])
-        rows.append([_btn("📝 OTP settings / تنظیمات OTP", "adm:otp_settings")])
-    rows.append([_btn(f"🛠 Maintenance / حالت تعمیر: {'ON 🔴' if maintenance else 'OFF 🟢'}", "adm:maint")])
-    rows.append([_btn("🔗 Support / پشتیبانی", "adm:support"), _btn("🔗 Official channel / کانال رسمی", "adm:official")])
-    rows.append([_btn("✖️ Close / بستن", "adm:close")])
+        rows.append([_btn("🔑 API keys", "adm:api_keys"), _btn("⭐ Buy Coin", "adm:points")])
+        rows.append([_btn("📝 OTP message", "adm:otp_template"), _btn("🔘 OTP buttons", "adm:otp_buttons")])
+        rows.append([_btn("👮 Admins", "adm:admins"), _btn("📝 OTP settings", "adm:otp_settings")])
+    rows.append([_btn(f"🛠 Maintenance: {'ON 🔴' if maintenance else 'OFF 🟢'}", "adm:maint")])
+    rows.append([_btn("🔗 Support", "adm:support"), _btn("📢 Official channel", "adm:official")])
+    rows.append([_btn("✖️ Close", "adm:close")])
     return InlineKeyboardMarkup(rows)
 
 
