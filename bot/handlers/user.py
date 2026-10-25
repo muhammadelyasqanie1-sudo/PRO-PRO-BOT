@@ -417,7 +417,7 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if not numbers:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
-        # Selecting a country immediately assigns one available number; no extra Get Number step.
+        # Selecting a country immediately assigns up to THREE available numbers.
         context.user_data["number_selected_country"] = country
         now = time.monotonic()
         last_request = float(context.user_data.get("last_number_request_at", 0))
@@ -431,28 +431,33 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
         assigned = []
         for item in numbers:
+            if len(assigned) >= 3:
+                break
             if await db.assign_phone_number(int(item["id"]), q.from_user.id):
                 assigned.append(item)
-                break
         if not assigned:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
         context.user_data["last_number_request_at"] = time.monotonic()
-        item = assigned[0]
-        message_text = (
-            f"📱 <b>{html.escape(str(service))}</b>\\n"
-            f"🌍 {html.escape(str(item['country']))}\\n"
-            f"📩 " + ("Waiting for OTP" if lang == "en" else "منتظر کد تأیید")
-        )
-        buttons = [
-            [ib(f"📋 {item['number']}", "success", copy_text=CopyTextButton(text=str(item["number"])))],
-            [ib("🔄 " + ("Change number (10s)" if lang == "en" else "تغییر شماره (۱۰ ثانیه)"), "primary", callback_data="number:get:0")],
+        context.user_data["number_last_assigned_ids"] = [int(item["id"]) for item in assigned]
+        blocks = []
+        buttons = []
+        for index, item in enumerate(assigned, 1):
+            blocks.append(
+                f"{index}. 📱 <b>{html.escape(str(service))}</b> — 🌍 {html.escape(str(item['country']))}\n"
+                f"📞 <code>{html.escape(str(item['number']))}</code>\n"
+                f"📩 " + ("Waiting for OTP" if lang == "en" else "منتظر کد تأیید")
+            )
+            buttons.append([ib(f"📋 {item['number']}", "success", copy_text=CopyTextButton(text=str(item["number"])))])
+        message_text = "🎉 Assigned numbers / شماره‌های اختصاص‌یافته: " + str(len(assigned)) + "\n\n" + "\n\n".join(blocks)
+        buttons.append([ib("🔄 " + ("Change numbers (10s)" if lang == "en" else "تغییر شماره‌ها (۱۰ ثانیه)"), "primary", callback_data="number:get:0")])
+        buttons.extend([
             [ib("⬅️ " + ("Back to countries" if lang == "en" else "برگشت به کشورها"), "primary", callback_data="number:back:countries")],
             [ib("⬅️ " + ("Back to services" if lang == "en" else "برگشت به سرویس‌ها"), "danger", callback_data="number:back:services")],
-        ]
+        ])
         otp_link = (await db.get_setting("otp_channel_link")).strip()
         if otp_link.startswith("https://t.me/"):
-            buttons.insert(1, [ib("📢 " + ("OTP Channel" if lang == "en" else "کانال کدها"), "primary", url=otp_link)])
+            buttons.insert(len(assigned), [ib("📢 " + ("OTP Channel" if lang == "en" else "کانال کدها"), "primary", url=otp_link)])
         await q.message.reply_text(message_text, reply_markup=InlineKeyboardMarkup(buttons))
         return
 
@@ -469,12 +474,31 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await q.message.reply_text(t(lang, "no_numbers"))
             return
         context.user_data["number_selected_country"] = country
-        await q.message.reply_text(
-            f"🌐 Country: <b>{html.escape(context.user_data.get('number_base_country', 'Afghanistan'))}</b>\n📶 Operator: <b>{html.escape(operator)}</b>\nPress the button below to get one number.",
-            reply_markup=InlineKeyboardMarkup([[
-                ib(t(lang, "get_number_button"), "success", callback_data="number:get:0")
-            ]]),
-        )
+        # No separate Get Number confirmation: assign up to three immediately.
+        context.user_data["number_selected_country"] = country
+        numbers = await db.list_available_numbers(service=service, country=country)
+        assigned = []
+        for item in numbers:
+            if len(assigned) >= 3:
+                break
+            if await db.assign_phone_number(int(item["id"]), q.from_user.id):
+                assigned.append(item)
+        if not assigned:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        context.user_data["last_number_request_at"] = time.monotonic()
+        context.user_data["number_last_assigned_ids"] = [int(item["id"]) for item in assigned]
+        blocks = [f"{i}. 📱 <b>{html.escape(str(service))}</b> — <code>{html.escape(str(item['number']))}</code>" for i, item in enumerate(assigned, 1)]
+        buttons = [[ib(f"📋 {item['number']}", "success", copy_text=CopyTextButton(text=str(item["number"]))) ] for item in assigned]
+        buttons.extend([
+            [ib("🔄 Change numbers (10s)", "primary", callback_data="number:get:0")],
+            [ib("⬅️ Back to countries", "primary", callback_data="number:back:countries")],
+            [ib("⬅️ Back to services", "danger", callback_data="number:back:services")],
+        ])
+        otp_link = (await db.get_setting("otp_channel_link")).strip()
+        if otp_link.startswith("https://t.me/"):
+            buttons.insert(len(assigned), [ib("📢 OTP Channel", "primary", url=otp_link)])
+        await q.message.reply_text("🎉 Assigned numbers: " + str(len(assigned)) + "\n\n" + "\n".join(blocks), reply_markup=InlineKeyboardMarkup(buttons))
         return
 
     if len(data) >= 2 and data[1] == "get":
@@ -497,36 +521,36 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if not numbers:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
-        # Assign exactly one number per tap. The number itself is a compact copy button,
-        # like the reference screenshots; no extra operator or confirmation screen is added.
         assigned = []
         for item in numbers:
+            if len(assigned) >= 3:
+                break
             if await db.assign_phone_number(int(item["id"]), q.from_user.id):
                 assigned.append(item)
-                break
-        if assigned:
-            context.user_data["last_number_request_at"] = time.monotonic()
-            item = assigned[0]
-            number_text = html.escape(str(item["number"]))
-            country_text = html.escape(str(item["country"]))
-            service_text = html.escape(str(service))
-            message_text = (
-                f"📱 <b>{service_text}</b>\n"
-                f"🌍 {country_text}\n"
+        if not assigned:
+            await q.message.reply_text(t(lang, "no_numbers"))
+            return
+        context.user_data["last_number_request_at"] = time.monotonic()
+        context.user_data["number_last_assigned_ids"] = [int(item["id"]) for item in assigned]
+        blocks = []
+        buttons = []
+        for index, item in enumerate(assigned, 1):
+            blocks.append(
+                f"{index}. 📱 <b>{html.escape(str(service))}</b> — 🌍 {html.escape(str(item['country']))}\n"
+                f"📞 <code>{html.escape(str(item['number']))}</code>\n"
                 f"📩 " + ("Waiting for OTP" if lang == "en" else "منتظر کد تأیید")
             )
-            buttons = [
-                [ib(f"📋 {item['number']}", "success", copy_text=CopyTextButton(text=str(item["number"])))],
-                [ib("🔄 " + ("Get another number" if lang == "en" else "شمارهٔ دیگر"), "primary", callback_data="number:get:0")],
-                [ib("⬅️ " + ("Back to countries" if lang == "en" else "برگشت به کشورها"), "primary", callback_data="number:back:countries")],
-                [ib("⬅️ " + ("Back to services" if lang == "en" else "برگشت به سرویس‌ها"), "danger", callback_data="number:back:services")],
-            ]
-            otp_link = (await db.get_setting("otp_channel_link")).strip()
-            if otp_link.startswith("https://t.me/"):
-                buttons.insert(1, [ib("📢 " + ("OTP Channel" if lang == "en" else "کانال کدها"), "primary", url=otp_link)])
-            await q.message.reply_text(message_text, reply_markup=InlineKeyboardMarkup(buttons))
-            return
-        await q.message.reply_text(t(lang, "no_numbers"))
+            buttons.append([ib(f"📋 {item['number']}", "success", copy_text=CopyTextButton(text=str(item["number"])))])
+        message_text = "🎉 Assigned numbers / شماره‌های اختصاص‌یافته: " + str(len(assigned)) + "\n\n" + "\n\n".join(blocks)
+        buttons.append([ib("🔄 " + ("Change numbers (10s)" if lang == "en" else "تغییر شماره‌ها (۱۰ ثانیه)"), "primary", callback_data="number:get:0")])
+        buttons.extend([
+            [ib("⬅️ " + ("Back to countries" if lang == "en" else "برگشت به کشورها"), "primary", callback_data="number:back:countries")],
+            [ib("⬅️ " + ("Back to services" if lang == "en" else "برگشت به سرویس‌ها"), "danger", callback_data="number:back:services")],
+        ])
+        otp_link = (await db.get_setting("otp_channel_link")).strip()
+        if otp_link.startswith("https://t.me/"):
+            buttons.insert(len(assigned), [ib("📢 " + ("OTP Channel" if lang == "en" else "کانال کدها"), "primary", url=otp_link)])
+        await q.message.reply_text(message_text, reply_markup=InlineKeyboardMarkup(buttons))
         return
 
     # Compatibility for older inline buttons sent before this update.
