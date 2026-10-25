@@ -36,8 +36,8 @@ def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
     # Compact dashboard: related actions stay together in short two-button rows.
     rows = [
         [kb(t(lang, "menu_numbers"), "primary"), kb(t(lang, "menu_search"), "primary")],
-        [kb(t(lang, "menu_points"), "success"), kb(t(lang, "menu_refer"), "success")],
-        [kb(t(lang, "menu_traffic"), "primary"), kb(t(lang, "menu_withdraw"), "danger")],
+        [kb(t(lang, "menu_points"), "success"), kb(t(lang, "menu_invite"), "success")],
+        [kb(t(lang, "menu_traffic"), "primary")],
         [kb(t(lang, "menu_support"), "primary"), kb(t(lang, "menu_language"), "primary")],
     ]
     if admin:
