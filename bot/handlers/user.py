@@ -338,6 +338,20 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await q.message.reply_text(t(lang, "choose_number_service"), reply_markup=_number_choice_keyboard(services_with_stock, "service", 0))
         return
 
+    if len(data) >= 3 and data[1] == "back" and data[2] == "countries":
+        service = context.user_data.get("number_selected_service", "")
+        numbers = await db.list_available_numbers(service=service)
+        countries = list(dict.fromkeys(n["country"] for n in numbers))
+        context.user_data["number_countries"] = countries
+        if not countries:
+            await q.message.reply_text(t(lang, "no_numbers"))
+        else:
+            await q.message.reply_text(
+                t(lang, "choose_number_country", service=html.escape(service)),
+                reply_markup=_number_choice_keyboard(countries, "country", 0),
+            )
+        return
+
     if len(data) >= 3 and data[1] == "service_page":
         services = context.user_data.get("number_services", [])
         page = int(data[2]) if data[2].isdigit() else 0
@@ -377,7 +391,9 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
         numbers = await db.list_available_numbers(service=service)
         # Operator-tagged Afghan stock is grouped under a display country label.
-        countries = list(dict.fromkeys((n["country"].split(" · ", 1)[0]) for n in numbers))
+        # Keep operator-tagged inventory in the same country list, e.g. "Afghanistan · Etisalat".
+        # This removes the extra operator-selection screen and keeps the flow short.
+        countries = list(dict.fromkeys(n["country"] for n in numbers))
         if not countries:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
@@ -397,28 +413,18 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except (ValueError, IndexError, KeyError):
             await q.message.reply_text(t(lang, "no_numbers"))
             return
-        numbers = await db.list_available_numbers(service=service)
-        matching = [n for n in numbers if n["country"] == country or n["country"].startswith(country + " · ")]
-        if not matching:
+        numbers = await db.list_available_numbers(service=service, country=country)
+        if not numbers:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
-        operators = list(dict.fromkeys(n["country"].split(" · ", 1)[1] for n in matching if " · " in n["country"]))
-        context.user_data["number_base_country"] = country
-        if operators:
-            context.user_data["number_operators"] = operators
-            context.user_data["number_operator_country_map"] = {
-                n["country"].split(" · ", 1)[1]: n["country"] for n in matching if " · " in n["country"]
-            }
-            await q.message.reply_text(
-                f"🌐 Country: <b>{html.escape(country)}</b>\nChoose an operator / اپراتور را انتخاب کنید:",
-                reply_markup=_number_choice_keyboard(operators, "operator", 0),
-            )
-            return
+        # Country and provider/operator are already combined in the country label.
         context.user_data["number_selected_country"] = country
         await q.message.reply_text(
             t(lang, "confirm_get_number", country=html.escape(country)),
             reply_markup=InlineKeyboardMarkup([[
                 ib(t(lang, "get_number_button"), "success", callback_data="number:get:0")
+            ], [
+                ib("⬅️ " + ("Back to countries" if lang == "en" else "برگشت به کشورها"), "primary", callback_data="number:back:countries")
             ]]),
         )
         return
@@ -464,41 +470,34 @@ async def on_number_request(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if not numbers:
             await q.message.reply_text(t(lang, "no_numbers"))
             return
-        # Allocate up to two distinct numbers from this service/country only.
-        # Each number is claimed independently so concurrent users cannot get duplicates.
+        # Assign exactly one number per tap. The number itself is a compact copy button,
+        # like the reference screenshots; no extra operator or confirmation screen is added.
         assigned = []
         for item in numbers:
             if await db.assign_phone_number(int(item["id"]), q.from_user.id):
                 assigned.append(item)
-                if len(assigned) == 2:
-                    break
+                break
         if assigned:
             context.user_data["last_number_request_at"] = time.monotonic()
-            blocks = []
-            for index, item in enumerate(assigned, 1):
-                blocks.append(
-                    f"📱 <b>Number {index}</b>\n"
-                    + t(lang, "number_added",
-                        service=html.escape(service),
-                        country=html.escape(item["country"]),
-                        number=html.escape(item["number"]))
-                )
+            item = assigned[0]
+            number_text = html.escape(str(item["number"]))
+            country_text = html.escape(str(item["country"]))
+            service_text = html.escape(str(service))
+            message_text = (
+                f"📱 <b>{service_text}</b>\n"
+                f"🌍 {country_text}\n"
+                f"📩 " + ("Waiting for OTP" if lang == "en" else "منتظر کد تأیید")
+            )
             buttons = [
-                [ib(f"📋 Copy number {index} / کاپی شماره {index}", "success", copy_text=CopyTextButton(text=item["number"]))]
-                for index, item in enumerate(assigned, 1)
+                [ib(f"📋 {item['number']}", "success", copy_text=CopyTextButton(text=str(item["number"])))],
+                [ib("🔄 " + ("Get another number" if lang == "en" else "شمارهٔ دیگر"), "primary", callback_data="number:get:0")],
+                [ib("⬅️ " + ("Back to countries" if lang == "en" else "برگشت به کشورها"), "primary", callback_data="number:back:countries")],
+                [ib("⬅️ " + ("Back to services" if lang == "en" else "برگشت به سرویس‌ها"), "danger", callback_data="number:back:services")],
             ]
-            buttons.extend([
-                [ib("🔄 Get another pair / شماره‌های جدید", "primary", callback_data="number:get:0")],
-                [ib("⬅️ Back to services / برگشت به سرویس‌ها", "danger", callback_data="number:back:services")],
-            ])
             otp_link = (await db.get_setting("otp_channel_link")).strip()
             if otp_link.startswith("https://t.me/"):
-                buttons.insert(1, [ib("📢 OTP Channel / کانال کدها", "primary", url=otp_link)])
-            markup = InlineKeyboardMarkup(buttons)
-            if len(assigned) == 1:
-                await q.message.reply_text("\n\n".join(blocks) + "\n\n⚠️ Only one number is available in this selection right now.", reply_markup=markup)
-            else:
-                await q.message.reply_text("\n\n".join(blocks), reply_markup=markup)
+                buttons.insert(1, [ib("📢 " + ("OTP Channel" if lang == "en" else "کانال کدها"), "primary", url=otp_link)])
+            await q.message.reply_text(message_text, reply_markup=InlineKeyboardMarkup(buttons))
             return
         await q.message.reply_text(t(lang, "no_numbers"))
         return
