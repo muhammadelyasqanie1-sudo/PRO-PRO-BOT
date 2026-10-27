@@ -32,17 +32,19 @@ def close_button(lang: str | None = None, label: str | None = None) -> InlineKey
 
 
 def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
-    # Main dashboard: blue / green / red buttons in two columns.
-    # Compact dashboard: related actions stay together in short two-button rows.
+    # Compact green dashboard inspired by the supplied bot reference:
+    # the main number action is prominent, with history and related tools grouped below.
     rows = [
-        [kb(t(lang, "menu_numbers"), "primary"), kb(t(lang, "menu_search"), "primary")],
+        [kb(t(lang, "menu_numbers"), "success")],
+        [kb(t(lang, "menu_sessions"), "success")],
+        [kb(t(lang, "menu_withdraw"), "success"), kb(t(lang, "menu_2fa"), "success")],
         [kb(t(lang, "menu_points"), "success"), kb(t(lang, "menu_invite"), "success")],
-        [kb(t(lang, "menu_traffic"), "primary")],
-        [kb(t(lang, "menu_support"), "primary"), kb(t(lang, "menu_language"), "primary")],
+        [kb(t(lang, "menu_language"), "success"), kb(t(lang, "menu_support"), "success")],
+        [kb(t(lang, "menu_about"), "primary")],
     ]
     if admin:
         rows.append([kb(t(lang, "menu_admin"), "danger")])
-    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
 
 
 def wallet_keyboard(lang: str | None) -> ReplyKeyboardMarkup:
