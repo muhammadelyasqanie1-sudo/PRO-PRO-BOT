@@ -286,16 +286,51 @@ async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 def _number_choice_keyboard(items: list[str], prefix: str, page: int = 0, page_size: int = 20) -> "InlineKeyboardMarkup":
-    """Keep Telegram inline markup small even when provider inventory has many countries."""
+    """Two-column green choice grid with country flags, matching the supplied bot reference."""
     from telegram import InlineKeyboardMarkup
 
     start = max(0, page) * page_size
     shown = items[start:start + page_size]
-    # One wide blue button per row; service names are shown in capitals (INSTAGRAM, FACEBOOK ...).
-    rows = [
-        [ib(str(item)[:60].upper() if prefix == "service" else str(item)[:60], "primary", callback_data=f"number:{prefix}:{start + i}")]
-        for i, item in enumerate(shown)
-    ]
+    service_icons = {
+        "whatsapp": "🟢", "telegram": "✈️", "facebook": "🔵",
+        "instagram": "📸", "tiktok": "🎵", "gmail": "✉️",
+        "google": "🔎", "gaming": "🎮", "other services": "🧩",
+    }
+    country_flags = {
+        "afghanistan": "🇦🇫", "united states": "🇺🇸", "usa": "🇺🇸", "us": "🇺🇸",
+        "united kingdom": "🇬🇧", "uk": "🇬🇧", "great britain": "🇬🇧",
+        "russia": "🇷🇺", "russian federation": "🇷🇺", "india": "🇮🇳",
+        "pakistan": "🇵🇰", "bangladesh": "🇧🇩", "indonesia": "🇮🇩",
+        "brazil": "🇧🇷", "canada": "🇨🇦", "germany": "🇩🇪",
+        "france": "🇫🇷", "turkey": "🇹🇷", "türkiye": "🇹🇷",
+        "iran": "🇮🇷", "iran, islamic republic of": "🇮🇷",
+        "united arab emirates": "🇦🇪", "uae": "🇦🇪", "saudi arabia": "🇸🇦",
+        "nigeria": "🇳🇬", "egypt": "🇪🇬", "vietnam": "🇻🇳",
+        "thailand": "🇹🇭", "philippines": "🇵🇭", "malaysia": "🇲🇾",
+        "nepal": "🇳🇵", "uzbekistan": "🇺🇿", "kazakhstan": "🇰🇿",
+        "ukraine": "🇺🇦", "spain": "🇪🇸", "italy": "🇮🇹",
+        "mexico": "🇲🇽", "south africa": "🇿🇦", "china": "🇨🇳",
+        "japan": "🇯🇵", "south korea": "🇰🇷", "korea": "🇰🇷",
+        "australia": "🇦🇺", "poland": "🇵🇱", "netherlands": "🇳🇱",
+        "sweden": "🇸🇪", "switzerland": "🇨🇭", "argentina": "🇦🇷",
+    }
+
+    rows = []
+    for offset in range(0, len(shown), 2):
+        row = []
+        for index in range(offset, min(offset + 2, len(shown))):
+            item = str(shown[index])
+            if prefix == "service":
+                icon = next((emoji for name, emoji in service_icons.items() if name in item.casefold()), "📱")
+                label = f"{icon} {item[:24].upper()}"
+            else:
+                normalized = item.casefold().strip()
+                base_country = normalized.split(" · ", 1)[0].split(" - ", 1)[0].strip()
+                flag = country_flags.get(base_country, "🌍")
+                label = f"{flag} {item[:25]}"
+            row.append(ib(label[:60], "success", callback_data=f"number:{prefix}:{start + index}"))
+        rows.append(row)
+
     navigation = []
     if start > 0:
         navigation.append(ib("⬅️ Previous", "primary", callback_data=f"number:{prefix}_page:{page - 1}"))
