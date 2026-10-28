@@ -85,6 +85,26 @@ body{background:radial-gradient(ellipse at 12% -8%,#49318a55 0,transparent 36%),
     <h3 style="margin-top:20px" data-i18n="serviceVisibility">Service visibility</h3>
     <p data-i18n="serviceVisibilitySub">Turn inventory services on or off for users.</p>
     <div id="adminServices"></div>
+    <h3 style="margin-top:24px">⚙️ Global settings</h3>
+    <div class="admin-form">
+      <label class="admin-check"><input id="settingMaintenance" type="checkbox"> Maintenance mode</label>
+      <input id="settingSupport" placeholder="Support URL">
+      <input id="settingOfficial" placeholder="Official channel URL">
+      <label for="settingOtp">OTP message template</label>
+      <textarea id="settingOtp" rows="6" style="width:100%;padding:12px;background:#0d1527;color:var(--text);border:1px solid var(--line);border-radius:13px;font:inherit"></textarea>
+      <label for="settingButtons">Menu buttons JSON (labels and premium emoji IDs)</label>
+      <textarea id="settingButtons" rows="8" style="width:100%;padding:12px;background:#0d1527;color:var(--text);border:1px solid var(--line);border-radius:13px;font:inherit"></textarea>
+      <button class="primary" id="saveSettings" type="button">💾 Save global settings</button>
+    </div>
+    <h3 style="margin-top:24px">👤 Individual user controls</h3>
+    <div class="admin-form">
+      <input id="userQuery" placeholder="Telegram user ID or @username">
+      <button class="primary" id="findUser" type="button">🔎 Find user</button>
+      <div id="userResult" class="empty">No user selected.</div>
+      <input id="userPointsDelta" type="number" step="1" placeholder="Buy Coin change (+/-)">
+      <button class="primary" id="applyUserPoints" type="button">⭐ Apply Buy Coin change</button>
+      <button class="primary" id="toggleUserBan" type="button">🚫 Ban / Unban user</button>
+    </div>
   </section>
   <footer class="footer" data-i18n="footer">Secure Telegram Mini App · Buy Coin is an in-bot points balance, not cash.</footer>
 </div>
