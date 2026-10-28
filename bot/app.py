@@ -31,6 +31,15 @@ async def _post_init(app: Application) -> None:
     db = Database(settings.db_path)
     await db.connect()
     app.bot_data["db"] = db
+    import json
+    from .keyboards import set_button_customizations
+    from .i18n import apply_button_customizations
+    try:
+        button_customizations = json.loads(await db.get_setting("button_customizations", "{}"))
+    except (TypeError, ValueError):
+        button_customizations = {}
+    set_button_customizations(button_customizations)
+    apply_button_customizations(button_customizations)
     await db.ensure_owner_points(settings.owner_id, 100000)
     await app.bot.set_my_commands(
         [BotCommand("start", "Start / menu"), BotCommand("app", "Open Mini App"), BotCommand("help", "Help"), BotCommand("cancel", "Cancel current action")]
