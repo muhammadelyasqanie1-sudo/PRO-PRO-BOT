@@ -84,7 +84,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data["state"] = "pe_add"
         await _edit(
             q,
-            "✨ Send me one or more messages containing <b>animated Premium emoji</b>.\n"
+            "✨ Send me one or more messages containing <b>animated Premium emoji</b> "
+            "(or an emoji-pack link).\n"
             "Every animated emoji found is saved and replaces its normal version in the bot.\n\n"
             "Send /cancel when you are done.",
             back_to_pe(),
@@ -95,7 +96,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _edit(
             q,
             "📦 Send an emoji-pack link such as <code>https://t.me/addemoji/PackName</code>.\n"
-            "Emoji already saved are kept; new ones are added.\n\nSend /cancel to abort.",
+            "Every emoji in the pack is saved and replaces the one already saved for the same emoji.\n\n"
+            "Send /cancel to abort.",
             back_to_pe(),
         )
 
@@ -135,6 +137,9 @@ _PACK_RE = re.compile(r"(?:addemoji/|^)([A-Za-z0-9_]{3,64})/?$")
 
 async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str) -> None:
     msg = update.effective_message
+    if state == "pe_add" and "addemoji/" in (msg.text or ""):
+        await _load_pack(update, context, (msg.text or "").strip())
+        return
     if state == "pe_add":
         found: dict[str, str] = {}
         parsed = {}
@@ -160,26 +165,35 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
         return
 
     if state == "pe_pack":
-        text = (msg.text or "").strip().split("?")[0].rstrip("/")
-        m = _PACK_RE.search(text)
-        if not m:
-            await msg.reply_text("Send a link like https://t.me/addemoji/PackName", reply_markup=back_to_pe())
-            return
-        try:
-            pack = await context.bot.get_sticker_set(m.group(1))
-        except TelegramError as exc:
-            await msg.reply_text(f"❌ Could not read that pack: {esc(str(exc))}", reply_markup=back_to_pe())
-            return
-        added = 0
-        for st in pack.stickers:
-            if st.custom_emoji_id and st.emoji:
-                key = pe.norm(st.emoji)
-                if key not in pe.REGISTRY.map:
-                    pe.REGISTRY.map[key] = st.custom_emoji_id
-                    added += 1
-        context.user_data.pop("state", None)
-        await _save(context)
-        await msg.reply_text(
-            f"✅ Pack <b>{esc(pack.title)}</b>: {added} new emoji saved. Total: <b>{len(pe.REGISTRY.map)}</b>.",
-            reply_markup=_home_markup(),
-        )
+        await _load_pack(update, context, (msg.text or "").strip())
+
+
+async def _load_pack(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+    msg = update.effective_message
+    text = text.split("?")[0].rstrip("/")
+    m = _PACK_RE.search(text)
+    if not m:
+        await msg.reply_text("Send a link like https://t.me/addemoji/PackName", reply_markup=back_to_pe())
+        return
+    try:
+        pack = await context.bot.get_sticker_set(m.group(1))
+    except TelegramError as exc:
+        await msg.reply_text(f"Could not read that pack: {esc(str(exc))}", reply_markup=back_to_pe())
+        return
+    new = changed = 0
+    for st in pack.stickers:
+        if st.custom_emoji_id and st.emoji:
+            key = pe.norm(st.emoji)
+            old = pe.REGISTRY.map.get(key)
+            if old is None:
+                new += 1
+            elif old != st.custom_emoji_id:
+                changed += 1
+            pe.REGISTRY.map[key] = st.custom_emoji_id  # an explicit pack always wins
+    context.user_data.pop("state", None)
+    await _save(context)
+    await msg.reply_text(
+        f"Pack <b>{esc(pack.title)}</b> ({len(pack.stickers)} emoji): {new} new, {changed} replaced. "
+        f"Total saved: <b>{len(pe.REGISTRY.map)}</b>.",
+        reply_markup=_home_markup(),
+    )
