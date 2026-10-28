@@ -184,6 +184,28 @@ body{background:radial-gradient(ellipse at 12% -8%,#49318a55 0,transparent 36%),
     $("adminServices").innerHTML=(adminData.services||[]).map(name=>'<div class="service-toggle"><span>'+esc(name)+'</span><button type="button" data-toggle-service="'+esc(name)+'">'+(active.has(name.toLowerCase())?esc(tr("enabled")):esc(tr("disabled")))+'</button></div>').join("") || '<div class="empty">'+esc(tr("noServices"))+'</div>';
     $("adminServices").querySelectorAll("[data-toggle-service]").forEach(btn=>btn.addEventListener("click",async()=>{btn.disabled=true;try{await api("/api/admin/service",{method:"POST",body:JSON.stringify({service:btn.dataset.toggleService})});adminData=await api("/api/admin/overview");renderAdmin();await refreshAll();}catch(err){toast(err.message);}finally{btn.disabled=false;}}));
   }
+  let selectedAdminUser = null;
+  async function loadAdminSettings() {
+    const result = await api("/api/admin/settings");
+    const s = result.settings || {};
+    $("settingMaintenance").checked = s.maintenance === "1";
+    $("settingSupport").value = s.support_url || "";
+    $("settingOfficial").value = s.official_url || "";
+    $("settingOtp").value = s.otp_template || "";
+    let buttons = {};
+    try { buttons = JSON.parse(s.button_customizations || "{}"); } catch (_) {}
+    $("settingButtons").value = JSON.stringify(buttons, null, 2);
+  }
+  async function findAdminUser() {
+    const query = $("userQuery").value.trim();
+    if (!query) throw new Error("Enter a Telegram user ID or username.");
+    const data = await api("/api/admin/user?q=" + encodeURIComponent(query));
+    selectedAdminUser = data.user;
+    const u = selectedAdminUser;
+    $("userResult").className = "admin-stat";
+    $("userResult").innerHTML = "<b>" + esc(u.first_name || "User") + " " + (u.username ? "(@" + esc(u.username) + ")" : "") + "</b><span>ID: " + u.id + " · Buy Coin: " + Number(u.points || 0) + " · " + (u.is_banned ? "BANNED" : "Active") + "</span>";
+    $("toggleUserBan").textContent = u.is_banned ? "Unban user" : "Ban user";
+  }
   async function refreshAll() {
     $("app").classList.add("loading");
     try {
@@ -195,12 +217,46 @@ body{background:radial-gradient(ellipse at 12% -8%,#49318a55 0,transparent 36%),
       renderServices();renderSessions();
       if(profile.is_admin){try{adminData=await api("/api/admin/overview");}catch(adminErr){adminData=null;toast(adminErr.message);}}else{adminData=null;}
       renderAdmin();
+      await loadAdminSettings();
     } catch(err) {
       if(err.status===401||err.status===403||!profile||!profile.is_admin){document.body.innerHTML="<main style=\"padding:32px;color:#fff;background:#080b18;min-height:100vh;font:16px system-ui\">Admin access only. Open from /app with an authorized admin account.</main>";return;}
       toast(err.message);
       if(err.data && err.data.join_required) (err.data.channels||[]).forEach(c=>{if(c.link)window.open(c.link,"_blank");});
     } finally {$("app").classList.remove("loading");}
   }
+  $("saveSettings").addEventListener("click", async()=>{
+    const btn=$("saveSettings");btn.disabled=true;
+    try {
+      let buttons;
+      try { buttons=JSON.parse($("settingButtons").value||"{}"); } catch (_) { throw new Error("Menu buttons JSON is invalid."); }
+      await api("/api/admin/settings",{method:"POST",body:JSON.stringify({
+        maintenance:$("settingMaintenance").checked?"1":"0",
+        support_url:$("settingSupport").value.trim(),
+        official_url:$("settingOfficial").value.trim(),
+        otp_template:$("settingOtp").value,
+        button_customizations:JSON.stringify(buttons)
+      })});
+      toast("Global settings saved.");
+    } catch(err) { toast(err.message); }
+    finally { btn.disabled=false; }
+  });
+  $("findUser").addEventListener("click", async()=>{try{await findAdminUser();}catch(err){toast(err.message);}});
+  $("toggleUserBan").addEventListener("click", async()=>{
+    if(!selectedAdminUser)return;
+    try {
+      await api("/api/admin/user",{method:"POST",body:JSON.stringify({user_id:selectedAdminUser.id,banned:!selectedAdminUser.is_banned})});
+      await findAdminUser();toast("User status updated.");
+    } catch(err){toast(err.message);}
+  });
+  $("applyUserPoints").addEventListener("click", async()=>{
+    if(!selectedAdminUser)return;
+    const delta=Number($("userPointsDelta").value);
+    if(!Number.isInteger(delta)||delta===0){toast("Enter a non-zero integer adjustment.");return;}
+    try {
+      await api("/api/admin/user",{method:"POST",body:JSON.stringify({user_id:selectedAdminUser.id,points_delta:delta})});
+      $("userPointsDelta").value="";await findAdminUser();toast("Buy Coin balance updated.");
+    } catch(err){toast(err.message);}
+  });
   $("langBtn").addEventListener("click",()=>setLang(lang==="en"?"dr":"en"));
   $("refreshBtn").addEventListener("click",refreshAll);$("sessionsRefresh").addEventListener("click",refreshAll);$("adminRefresh").addEventListener("click",async()=>{try{adminData=await api("/api/admin/overview");renderAdmin();}catch(err){toast(err.message);}});
   $("search").addEventListener("input",renderServices);
