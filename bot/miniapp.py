@@ -74,6 +74,9 @@ async def _telegram_user(request: web.Request) -> tuple[dict | None, web.Respons
         return None, _json({"ok": False, "error": "Open the bot and press /start before using the Mini App."}, 403)
     if row.get("is_banned"):
         return None, _json({"ok": False, "error": "This account is restricted."}, 403)
+    # This Mini App is an administration console, never a public user workspace.
+    if auth["user_id"] != settings.owner_id and not await db.is_admin(auth["user_id"]):
+        return None, _json({"ok": False, "error": "This Mini App is restricted to the bot owner and administrators."}, 403)
     if await db.get_setting("maintenance") == "1" and auth["user_id"] != settings.owner_id and not await db.is_admin(auth["user_id"]):
         return None, _json({"ok": False, "error": "The service is temporarily under maintenance."}, 503)
     # Match the bot guard: administrators can still access the Mini App while configuring force-join.
@@ -517,16 +520,6 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     await site.start()
     log.info("Mini App web server listening on %s:%s", host, port)
 
-    public_url = os.getenv("MINI_APP_URL", "").strip() or os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
-    if public_url and not public_url.startswith(("https://", "http://")):
-        public_url = "https://" + public_url
-    if public_url.startswith("https://"):
-        try:
-            await telegram_app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="Open NUM BOT", web_app=WebAppInfo(url=public_url.rstrip("/") + "/"))
-            )
-        except TelegramError as exc:
-            log.warning("Could not set Telegram Mini App menu button (%s).", type(exc).__name__)
-    elif public_url:
-        log.warning("MINI_APP_URL must be an HTTPS URL; Telegram Web Apps require HTTPS.")
+    # No global menu button: Telegram displays it to every user.
+    # Administrators open the console using the owner/admin-only /app command.
     return runner
