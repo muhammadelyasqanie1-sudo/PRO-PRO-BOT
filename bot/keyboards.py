@@ -11,6 +11,20 @@ from .i18n import LANGUAGE_NAMES, t
 BUTTON_STYLES = os.getenv("BUTTON_STYLES", "1").strip().lower() not in ("0", "false", "no", "off")
 
 CLOSE_CALLBACK = "ui:close"
+BUTTON_CUSTOMIZATIONS: dict[str, dict] = {}
+
+def set_button_customizations(value: dict) -> None:
+    global BUTTON_CUSTOMIZATIONS
+    BUTTON_CUSTOMIZATIONS = value if isinstance(value, dict) else {}
+
+def _custom_button(key: str, lang: str | None, fallback: str, style: str | None = None) -> KeyboardButton:
+    item = BUTTON_CUSTOMIZATIONS.get(key, {})
+    label = item.get("dr" if lang == "dr" else "en") or fallback
+    extra = _extra(style) or {}
+    emoji_id = str(item.get("emoji_id", "")).strip()
+    if emoji_id.isdigit():
+        extra["icon_custom_emoji_id"] = emoji_id
+    return KeyboardButton(label, api_kwargs=extra or None)
 
 
 def _extra(style: str | None) -> dict | None:
@@ -35,15 +49,15 @@ def menu_keyboard(lang: str | None, admin: bool) -> ReplyKeyboardMarkup:
     # Compact green dashboard inspired by the supplied bot reference:
     # the main number action is prominent, with history and related tools grouped below.
     rows = [
-        [kb(t(lang, "menu_numbers"), "success")],
-        [kb(t(lang, "menu_sessions"), "success")],
-        [kb(t(lang, "menu_withdraw"), "success"), kb(t(lang, "menu_2fa"), "success")],
-        [kb(t(lang, "menu_points"), "success"), kb(t(lang, "menu_invite"), "success")],
-        [kb(t(lang, "menu_language"), "success"), kb(t(lang, "menu_support"), "success")],
-        [kb(t(lang, "menu_about"), "primary")],
+        [_custom_button("menu_numbers", lang, t(lang, "menu_numbers"), "success")],
+        [_custom_button("menu_sessions", lang, t(lang, "menu_sessions"), "success")],
+        [_custom_button("menu_withdraw", lang, t(lang, "menu_withdraw"), "success"), _custom_button("menu_2fa", lang, t(lang, "menu_2fa"), "success")],
+        [_custom_button("menu_points", lang, t(lang, "menu_points"), "success"), _custom_button("menu_invite", lang, t(lang, "menu_invite"), "success")],
+        [_custom_button("menu_language", lang, t(lang, "menu_language"), "success"), _custom_button("menu_support", lang, t(lang, "menu_support"), "success")],
+        [_custom_button("menu_about", lang, t(lang, "menu_about"), "primary")],
     ]
     if admin:
-        rows.append([kb(t(lang, "menu_admin"), "danger")])
+        rows.append([_custom_button("menu_admin", lang, t(lang, "menu_admin"), "danger")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
 
 
