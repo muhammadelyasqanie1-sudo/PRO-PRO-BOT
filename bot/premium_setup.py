@@ -4,7 +4,8 @@ install() must run before build_application(): it
   * gives menu buttons a leading emoji (so they can become animated button icons) and keeps
     routing working for both the labelled and the icon-only text,
   * adds the "Premium Emoji" button to the owner's admin panel,
-  * makes the bot object a PremiumBot (animated emoji in all outgoing messages), and
+  * makes the bot object a PremiumBot (animated emoji in all outgoing messages),
+  * fills the animated-emoji map automatically from Telegram's official animated emoji, and
   * registers the Premium Emoji admin handlers.
 """
 from __future__ import annotations
@@ -65,9 +66,61 @@ def _wrap_admin_keyboard() -> None:
     admin_handlers.admin_panel_keyboard = admin_panel_keyboard
 
 
+async def autoseed(bot, db) -> int:
+    """Fill the emoji map automatically from Telegram's official animated emoji.
+
+    Uses getForumTopicIconStickers (official custom emoji, available to every bot, no pack names
+    needed) plus any packs listed in the `premium_emoji_packs` setting (comma separated).
+    Emoji the admin already saved are never overwritten. Returns how many were added.
+    """
+    added = 0
+    stickers = []
+    try:
+        stickers += list(await bot.get_forum_topic_icon_stickers())
+    except Exception as exc:  # noqa: BLE001 - best effort
+        emoji_admin.log.warning("Could not load official animated emoji: %s", exc)
+    for name in [p.strip() for p in (await db.get_setting("premium_emoji_packs", "")).split(",") if p.strip()]:
+        try:
+            stickers += list((await bot.get_sticker_set(name)).stickers)
+        except Exception as exc:  # noqa: BLE001
+            emoji_admin.log.warning("Could not load emoji pack %s: %s", name, exc)
+    for st in stickers:
+        if st.custom_emoji_id and st.emoji:
+            key = pe.norm(st.emoji)
+            if key not in pe.REGISTRY.map:
+                pe.REGISTRY.map[key] = st.custom_emoji_id
+                added += 1
+    if added:
+        await db.set_setting(pe.SETTING_MAP, pe.REGISTRY.dump())
+    return added
+
+
 async def _pe_callback(update, context) -> None:
-    await emoji_admin.on_callback(update, context)
+    q = update.callback_query
+    if (q.data or "") == "adm:pe_auto":
+        from .utils import get_db, is_admin
+
+        if not await is_admin(context, q.from_user.id):
+            await q.answer("Not authorized.", show_alert=True)
+        else:
+            added = await autoseed(context.bot, get_db(context))
+            await q.answer(f"Added {added} animated emoji. Total: {len(pe.REGISTRY.map)}", show_alert=True)
+            await emoji_admin._edit(q, emoji_admin._home_text(), emoji_admin._home_markup())
+    else:
+        await emoji_admin.on_callback(update, context)
     raise ApplicationHandlerStop  # never let the generic admin callback handle it again
+
+
+def _wrap_pe_home() -> None:
+    original = emoji_admin._home_markup
+
+    def home_markup():
+        markup = original()
+        rows = [list(r) for r in markup.inline_keyboard]
+        rows.insert(0, [keyboards._btn("\U0001FA84 Auto-fill official animated emoji", "adm:pe_auto")])
+        return type(markup)(rows)
+
+    emoji_admin._home_markup = home_markup
 
 
 async def _pe_message(update, context) -> None:
@@ -99,6 +152,7 @@ def install() -> None:
         return
     _style_menu()
     _wrap_admin_keyboard()
+    _wrap_pe_home()
     original_build = app_module.build_application
 
     def build_application(settings):
@@ -111,7 +165,14 @@ def install() -> None:
 
     async def post_init(app):
         await original_post_init(app)
-        await pe.reload(app.bot_data["db"])
+        db = app.bot_data["db"]
+        await pe.reload(db)
+        if await db.get_setting("premium_emoji_auto", "1") == "1":
+            try:
+                n = await autoseed(app.bot, db)
+                emoji_admin.log.info("Premium emoji: %s auto-added, %s total", n, len(pe.REGISTRY.map))
+            except Exception:  # noqa: BLE001
+                emoji_admin.log.exception("Premium emoji auto-fill failed")
 
     app_module._post_init = post_init
     app_module._premium_installed = True

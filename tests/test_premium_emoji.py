@@ -29,10 +29,10 @@ def test_text_and_markup() -> None:
     assert R.text(out) == out  # idempotent: never nests
     m = menu_keyboard("en", False)
     d = R.markup(m).to_dict()["keyboard"]
-    assert d[0][0]["text"] == "\U0001F4F2 GET NUMBER" and "icon_custom_emoji_id" not in d[0][0]
+    assert d[0][0]["text"] == "\U0001F4F2 Get Number" and "icon_custom_emoji_id" not in d[0][0]
     R.load('{"\U0001F4F2":"333"}', "1")
     d = R.markup(m).to_dict()["keyboard"]
-    assert d[0][0]["text"] == "GET NUMBER" and d[0][0]["style"] == "primary"
+    assert d[0][0]["text"] == "Get Number" and d[0][0]["style"] == "success"
     assert d[0][0]["icon_custom_emoji_id"] == "333"
     # copy-text button keeps its payload
     from telegram import InlineKeyboardMarkup
@@ -50,7 +50,8 @@ def test_setup() -> None:
 
     premium_setup._style_menu()
     premium_setup._style_menu()  # idempotent
-    assert i18n.STRINGS["en"]["menu_numbers"] == "\U0001F4F2 GET NUMBER"
+    assert i18n.STRINGS["en"]["menu_admin"] == "\U0001F6E0 Admin Panel"
+    assert i18n.STRINGS["en"]["menu_numbers"].endswith("Get Number")  # already had an emoji: untouched
     premium_setup._wrap_admin_keyboard()
     from bot import keyboards
 
@@ -65,8 +66,8 @@ def test_setup() -> None:
 
 
 def test_routing() -> None:
-    assert MENU_LOOKUP.get("\U0001F4F2 GET NUMBER") == "menu_numbers"
-    assert MENU_LOOKUP.get("GET NUMBER") == "menu_numbers"  # icon moved to the button
+    assert MENU_LOOKUP.get("\U0001F4F2 Get Number") == "menu_numbers"
+    assert MENU_LOOKUP.get("Get Number") == "menu_numbers"  # icon moved to the button
     assert MENU_LOOKUP.get("Admin Panel") == "menu_admin"
     assert MENU_LOOKUP.get("hello") is None
 
