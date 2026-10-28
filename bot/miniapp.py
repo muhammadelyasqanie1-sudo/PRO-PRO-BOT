@@ -313,6 +313,48 @@ async def admin_overview(request: web.Request) -> web.Response:
     })
 
 
+async def admin_settings(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    db = session["db"]
+    keys = ("maintenance", "otp_template", "button_customizations", "support_url", "official_url", "custom_services")
+    values = {}
+    for key in keys:
+        values[key] = await db.get_setting(key, "")
+    return _json({"ok": True, "settings": values})
+
+
+async def admin_save_settings(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    db = session["db"]
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return _json({"ok": False, "error": "Invalid request body."}, 400)
+    allowed = {"maintenance", "otp_template", "button_customizations", "support_url", "official_url", "custom_services"}
+    for key, value in payload.items():
+        if key not in allowed or not isinstance(value, str):
+            continue
+        if len(value) > 10000:
+            return _json({"ok": False, "error": f"Setting {key} is too long."}, 400)
+        if key in ("support_url", "official_url") and value and value != "-" and not value.startswith(("https://t.me/", "https://telegram.me/", "https://")):
+            return _json({"ok": False, "error": f"Invalid URL for {key}."}, 400)
+        if key == "maintenance" and value not in ("0", "1"):
+            return _json({"ok": False, "error": "maintenance must be 0 or 1."}, 400)
+        if key == "button_customizations":
+            try:
+                decoded = json.loads(value or "{}")
+                if not isinstance(decoded, dict):
+                    raise ValueError()
+            except (ValueError, json.JSONDecodeError):
+                return _json({"ok": False, "error": "Button configuration must be valid JSON."}, 400)
+        await db.set_setting(key, value)
+    return _json({"ok": True, "message": "Settings saved."})
+
+
 async def admin_add_number(request: web.Request) -> web.Response:
     session, error = await _telegram_user(request)
     if error:
@@ -509,6 +551,8 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server.router.add_get("/api/sessions", sessions)
     server.router.add_post("/api/number", request_number)
     server.router.add_get("/api/admin/overview", admin_overview)
+    server.router.add_get("/api/admin/settings", admin_settings)
+    server.router.add_post("/api/admin/settings", admin_save_settings)
     server.router.add_post("/api/admin/provider-sync", admin_provider_sync)
     server.router.add_post("/api/admin/number", admin_add_number)
     server.router.add_post("/api/admin/service", admin_toggle_service)
