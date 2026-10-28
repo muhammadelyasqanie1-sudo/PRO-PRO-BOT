@@ -177,6 +177,18 @@ MENU_LOOKUP: dict[str, str] = {
     STRINGS[lang][key]: key for lang in STRINGS for key in MENU_KEYS
 }
 
+def apply_button_customizations(value: dict) -> None:
+    """Apply persisted button labels and keep reply-keyboard routing synchronized."""
+    for key, item in (value or {}).items():
+        if key not in MENU_KEYS or not isinstance(item, dict):
+            continue
+        if item.get("en"):
+            STRINGS["en"][key] = str(item["en"])[:50]
+        if item.get("dr"):
+            STRINGS["dr"][key] = str(item["dr"])[:50]
+    MENU_LOOKUP.clear()
+    MENU_LOOKUP.update({STRINGS[lang][key]: key for lang in STRINGS for key in MENU_KEYS})
+
 
 def norm_lang(lang: str | None) -> str:
     return lang if lang in STRINGS else DEFAULT_LANG
