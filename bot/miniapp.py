@@ -408,6 +408,15 @@ async def admin_save_settings(request: web.Request) -> web.Response:
             except (ValueError, json.JSONDecodeError):
                 return _json({"ok": False, "error": "Button configuration must be valid JSON."}, 400)
         await db.set_setting(key, value)
+    if "button_customizations" in payload:
+        try:
+            custom = json.loads(await db.get_setting("button_customizations", "{}"))
+            from .keyboards import set_button_customizations
+            from .i18n import apply_button_customizations
+            set_button_customizations(custom)
+            apply_button_customizations(custom)
+        except (ValueError, TypeError):
+            pass
     return _json({"ok": True, "message": "Settings saved."})
 
 
