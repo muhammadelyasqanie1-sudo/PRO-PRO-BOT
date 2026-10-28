@@ -95,7 +95,14 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await extra_admin.on_callback(update, context, action, arg)
         return
 
-    if action == "home":
+    if action == "button_custom":
+        if not owner:
+            await q.answer("Only the owner can edit button labels and emoji.", show_alert=True)
+            return
+        context.user_data["state"] = "button_custom"
+        await _edit(q, "🎨 <b>Button text & emoji editor</b>\nSend one line in this format:\n<code>menu_numbers | Get Number | دریافت شماره | 5368324170671202286</code>\n\nFields: button key | English text | Dari text | custom emoji ID. Use <code>-</code> for normal emoji/no premium icon.\nKeys: menu_numbers, menu_sessions, menu_withdraw, menu_2fa, menu_points, menu_invite, menu_language, menu_support, menu_about, menu_admin.\n\nSend /cancel to abort.", back_keyboard())
+
+    elif action == "home":
         context.user_data.pop("state", None)
         await _show_home(q, context)
 
@@ -364,6 +371,27 @@ async def handle_state(update: Update, context: ContextTypes.DEFAULT_TYPE, state
     uid = update.effective_user.id
     db = get_db(context)
     text = (msg.text or "").strip()
+
+    if state == "button_custom":
+        if not is_owner(context, uid):
+            context.user_data.pop("state", None)
+            return
+        parts = [part.strip() for part in text.split("|")]
+        allowed = {"menu_numbers", "menu_sessions", "menu_withdraw", "menu_2fa", "menu_points", "menu_invite", "menu_language", "menu_support", "menu_about", "menu_admin"}
+        if len(parts) != 4 or parts[0] not in allowed or not parts[1] or not parts[2] or (parts[3] != "-" and not parts[3].isdigit()):
+            await msg.reply_text("Invalid format. Use: <code>button_key | English text | Dari text | custom emoji ID</code>. Send /cancel to abort.")
+            return
+        import json
+        custom = json.loads(await db.get_setting("button_customizations", "{}"))
+        custom[parts[0]] = {"en": parts[1][:50], "dr": parts[2][:50], "emoji_id": "" if parts[3] == "-" else parts[3]}
+        await db.set_setting("button_customizations", json.dumps(custom, ensure_ascii=False))
+        from ..keyboards import set_button_customizations
+        set_button_customizations(custom)
+        from ..i18n import apply_button_customizations
+        apply_button_customizations(custom)
+        context.user_data.pop("state", None)
+        await msg.reply_text("✅ Button text and emoji saved. Send /start to refresh your menu.\n\nFor premium emoji, enter its numeric custom_emoji_id, not the sticker-pack link.", reply_markup=back_keyboard())
+        return
 
     if state in ("api_add", "points_add", "points_sub"):
         await extra_admin.handle_state(update, context, state)
