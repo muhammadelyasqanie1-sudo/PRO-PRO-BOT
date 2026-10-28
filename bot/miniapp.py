@@ -313,6 +313,62 @@ async def admin_overview(request: web.Request) -> web.Response:
     })
 
 
+async def admin_user(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    db = session["db"]
+    query = str(request.query.get("q", "")).strip()
+    if not query:
+        return _json({"ok": False, "error": "Enter a Telegram user ID or username."}, 400)
+    user = await db.get_user(int(query) if query.lstrip("-").isdigit() else query)
+    if not user:
+        return _json({"ok": False, "error": "User not found. They may need to start the bot first."}, 404)
+    return _json({"ok": True, "user": {
+        "id": int(user["id"]), "first_name": user.get("first_name") or "",
+        "username": user.get("username") or "", "is_banned": bool(user.get("is_banned")),
+        "is_active": bool(user.get("is_active")), "points": int(user.get("points") or 0),
+        "referrals": int(user.get("referrals") or 0), "lang": user.get("lang") or "en"
+    }})
+
+
+async def admin_update_user(request: web.Request) -> web.Response:
+    session, error = await _telegram_user(request)
+    if error:
+        return error
+    db = session["db"]
+    try:
+        payload = await request.json()
+        user_id = int(payload.get("user_id", 0))
+    except (json.JSONDecodeError, AttributeError, TypeError, ValueError):
+        return _json({"ok": False, "error": "Invalid user update."}, 400)
+    user = await db.get_user(user_id)
+    if not user:
+        return _json({"ok": False, "error": "User not found."}, 404)
+    settings = session["app"].bot_data["settings"]
+    if user_id == settings.owner_id:
+        return _json({"ok": False, "error": "The owner account cannot be modified here."}, 403)
+    if "banned" in payload:
+        await db.set_banned(user_id, bool(payload["banned"]))
+        await db.set_active(user_id, not bool(payload["banned"]))
+    if "points_delta" in payload:
+        try:
+            delta = int(payload["points_delta"])
+        except (TypeError, ValueError):
+            return _json({"ok": False, "error": "Buy Coin adjustment must be an integer."}, 400)
+        if delta == 0 or abs(delta) > 1000000:
+            return _json({"ok": False, "error": "Buy Coin adjustment must be between -1000000 and 1000000, excluding zero."}, 400)
+        if not await db.adjust_points(user_id, delta, "admin_adjustment", actor_id=session["auth"]["user_id"]):
+            return _json({"ok": False, "error": "Could not update Buy Coin balance. Check the balance and try again."}, 409)
+    updated = await db.get_user(user_id)
+    return _json({"ok": True, "user": {
+        "id": int(updated["id"]), "first_name": updated.get("first_name") or "",
+        "username": updated.get("username") or "", "is_banned": bool(updated.get("is_banned")),
+        "is_active": bool(updated.get("is_active")), "points": int(updated.get("points") or 0),
+        "referrals": int(updated.get("referrals") or 0), "lang": updated.get("lang") or "en"
+    }})
+
+
 async def admin_settings(request: web.Request) -> web.Response:
     session, error = await _telegram_user(request)
     if error:
@@ -551,6 +607,8 @@ async def start_web_server(telegram_app) -> web.AppRunner | None:
     server.router.add_get("/api/sessions", sessions)
     server.router.add_post("/api/number", request_number)
     server.router.add_get("/api/admin/overview", admin_overview)
+    server.router.add_get("/api/admin/user", admin_user)
+    server.router.add_post("/api/admin/user", admin_update_user)
     server.router.add_get("/api/admin/settings", admin_settings)
     server.router.add_post("/api/admin/settings", admin_save_settings)
     server.router.add_post("/api/admin/provider-sync", admin_provider_sync)
