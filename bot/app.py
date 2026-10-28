@@ -64,9 +64,14 @@ async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def open_mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Offer the Mini App button when a public HTTPS URL has been configured."""
+    """Offer the admin console only to the owner and configured admins."""
     import os
+    from .utils import is_admin
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+    if not await is_admin(context, update.effective_user.id):
+        await update.effective_message.reply_text("This Mini App is available only to the bot owner and administrators.")
+        return
 
     url = os.getenv("MINI_APP_URL", "").strip()
     if not url:
