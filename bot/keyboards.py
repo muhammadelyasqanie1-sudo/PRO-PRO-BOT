@@ -132,6 +132,7 @@ def admin_panel_keyboard(maintenance: bool, is_owner: bool) -> InlineKeyboardMar
     ]
     if is_owner:
         rows.append([_btn("🔑 API keys", "adm:api_keys"), _btn("⭐ Buy Coin", "adm:points")])
+        rows.append([_btn("🎨 Button text & emoji", "adm:button_custom")])
         rows.append([_btn("📝 OTP message", "adm:otp_template"), _btn("🔘 OTP buttons", "adm:otp_buttons")])
         rows.append([_btn("👮 Admins", "adm:admins"), _btn("📝 OTP settings", "adm:otp_settings")])
     rows.append([_btn(f"🛠 Maintenance: {'ON 🔴' if maintenance else 'OFF 🟢'}", "adm:maint")])
